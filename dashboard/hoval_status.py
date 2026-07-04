@@ -290,7 +290,12 @@ def qr_svg(uri):
         import qrcode, qrcode.image.svg, io
         img = qrcode.make(uri, image_factory=qrcode.image.svg.SvgPathImage, box_size=5)
         b = io.BytesIO(); img.save(b)
-        return b.getvalue().decode()
+        s = b.getvalue().decode()
+        s = s[s.find("<svg"):]
+        import re as _re
+        s = _re.sub(r'width="[^"]*"', 'width="230"', s, count=1)
+        s = _re.sub(r'height="[^"]*"', 'height="230"', s, count=1)
+        return s
     except Exception:
         return ""
 
@@ -971,7 +976,7 @@ function apost(url, body, msgid){
 <tr><td>{L("Gehäuse","Case")}</td><td>{L("passend für Raspberry Pi 4","for Raspberry Pi 4")}</td></tr>
 <tr><td>{L("microSD-Karte","microSD card")}</td><td>{L("ab 16 GB","16 GB or more")}</td></tr>
 </table>
-<div class="note" style="margin-top:.8rem">{L("PoE ist optional — der Pi kann auch per USB-Netzteil (5 V/3 A) laufen. Anschluss am Hoval-CAN erfolgt am <b>WEZ-Modul</b> (Klemme + ⏚ H L). Details auf der Seite <b>Anleitung</b>.","PoE is optional — the Pi can also run from a USB power supply (5 V/3 A). The Hoval CAN is tapped at the <b>WEZ module</b> (terminal + ⏚ H L). Details on the <b>Guide</b> page.")}</div>
+<div class="note" style="margin-top:.8rem">{L("PoE ist optional — der Pi kann auch per USB-Netzteil (5 V/3 A) laufen. Anschluss am Hoval-CAN erfolgt am <b>WEZ-Modul</b> (Klemme + ⏚ H L). Details auf der Seite <b>Integration</b>.","PoE is optional — the Pi can also run from a USB power supply (5 V/3 A). The Hoval CAN is tapped at the <b>WEZ module</b> (terminal + ⏚ H L). Details on the <b>Integration</b> page.")}</div>
 </div></div>
 <h2 class="sec">{L("Die Seiten","The pages")}</h2>
 <ul>
@@ -1118,8 +1123,8 @@ nach außen wie ein <b>originaler Hoval-Modbus-Gateway</b> — deshalb funktioni
 </ul></div></div>
 
 <div class="domain"><div class="dh" style="background:#e2001a;background-image:linear-gradient(90deg,rgba(255,255,255,.15),rgba(255,255,255,0))"><span class="ic">💻</span><h2>2 · Software / Pi</h2></div><div class="dbody">
-<p>Auf dem Pi laufen drei Dienste mit Autostart: <code>can0</code> (CAN-Schnittstelle), die
-<b>HoxPi-Brücke</b> (CAN → Modbus-TCP :502) und dieses Dashboard (Port 80). Einmal eingerichtet
+<p>Auf dem Pi laufen mehrere Dienste mit Autostart: <code>can0</code> (CAN-Schnittstelle), die
+<b>HoxPi-Brücke</b> (CAN → Modbus-TCP :502) , dieses Dashboard (Port 80) sowie optional Exporter/Prometheus/Grafana für die Statistik. Einmal eingerichtet
 startet alles nach jedem Strom-Aus von selbst.</p>
 <div class="note">Pi im Netzwerk erreichbar unter <code>192.168.1.168</code> · Dashboard: einfach diese Seite.
 Bridge-Status: läuft &amp; liest live.</div></div></div>
@@ -1143,10 +1148,10 @@ Geräte-Integrationen dort — nicht „Vorlagen"). Welches Template du brauchst
 Energy Management nur bei Bedarf. Jedes Template hat im Download-Bereich eine deutsche „Praxisanleitung Hoval-Loxone".</div>
 <div class="note ok" style="margin-top:.6rem">Die Templates erwarten einen <b>Hoval-Modbus-Gateway</b> — genau den spielt HoxPi.
 Registernummern stimmen exakt mit der Hoval-Tabelle, also passen sie ohne Anpassung.
-Werte sind <b>Rohwerte</b> (z. B. °C ×10) — das Template skaliert selbst. Mehr dazu: Seite <b>Loxone</b>.</div></div></div>
+Werte sind <b>Rohwerte</b> (z. B. °C ×10) — das Template skaliert selbst. Mehr dazu: der Loxone-Abschnitt weiter oben.</div></div></div>
 
 <div class="domain"><div class="dh" style="background:#41bdf5;background-image:linear-gradient(90deg,rgba(255,255,255,.18),rgba(255,255,255,0))"><span class="ic">🏠</span><h2>4 · Home Assistant anbinden</h2></div><div class="dbody">
-<p>Fertige Konfiguration auf der Seite <a href="/homeassistant"><b>Home Assistant</b></a> herunterladen
+<p>Fertige Konfiguration im Home-Assistant-Abschnitt weiter oben herunterladen
 (<code>hoxpi.yaml</code>), in den <code>packages</code>-Ordner legen, HA neu starten — alle Sensoren
 erscheinen automatisch und sind bereits skaliert (°C, %, kW …).</p></div></div>
 
