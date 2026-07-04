@@ -1,0 +1,15 @@
+<?xml version="1.0" standalone='no'?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<service-group>
+  <name replace-wildcards="yes">HoxPi (%h) - Hoval CAN-Modbus Bridge</name>
+  <service>
+    <type>_device-info._tcp</type>
+    <port>0</port>
+    <txt-record>model=Raspberry Pi 4</txt-record>
+    <txt-record>function=Hoval CAN zu Modbus-TCP Bridge</txt-record>
+  </service>
+  <service>
+    <type>_modbus._tcp</type>
+    <port>502</port>
+  </service>
+</service-group>

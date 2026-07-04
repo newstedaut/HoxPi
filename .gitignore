@@ -1,0 +1,19 @@
+# Hoval-Daten: NIEMALS committen (Urheberrecht Hoval AG)
+# Die Dateien werden lokal mit tools/gen_registers.py bzw. tools/gen_reg_texts.py
+# aus der offiziellen Hoval-Datenpunktliste erzeugt.
+*.xlsx
+registers.json
+reg_texts.json
+
+# Anlagen-spezifische Konfiguration
+whitelist.json
+
+# Python
+__pycache__/
+*.pyc
+
+# Backups / Logs
+*.bak.*
+*.log
+*_out.txt
+statuslog*.csv

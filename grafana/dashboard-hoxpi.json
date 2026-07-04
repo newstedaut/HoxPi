@@ -1,0 +1,58 @@
+{
+ "uid": "hoxpi", "title": "HoxPi Wärmepumpe", "timezone": "browser",
+ "schemaVersion": 39, "version": 1, "refresh": "1m",
+ "time": {"from": "now-24h", "to": "now"},
+ "panels": [
+  {"id":1,"type":"timeseries","title":"Temperaturen","datasource":{"type":"prometheus","uid":"hoxpi-prom"},
+   "gridPos":{"h":9,"w":12,"x":0,"y":0},
+   "fieldConfig":{"defaults":{"unit":"celsius","custom":{"lineWidth":2}},"overrides":[]},
+   "targets":[
+    {"expr":"hoval_aussentemp_c","legendFormat":"Außen","refId":"A"},
+    {"expr":"hoval_vorlauf_c","legendFormat":"Vorlauf","refId":"B"},
+    {"expr":"hoval_ruecklauf_c","legendFormat":"Rücklauf","refId":"C"},
+    {"expr":"hoval_raum_ist_c","legendFormat":"Raum","refId":"D"}]},
+  {"id":2,"type":"timeseries","title":"Warmwasser","datasource":{"type":"prometheus","uid":"hoxpi-prom"},
+   "gridPos":{"h":9,"w":12,"x":12,"y":0},
+   "fieldConfig":{"defaults":{"unit":"celsius","custom":{"lineWidth":2}},"overrides":[]},
+   "targets":[
+    {"expr":"hoval_ww_ist_c","legendFormat":"WW Ist","refId":"A"},
+    {"expr":"hoval_ww_soll_c","legendFormat":"WW Soll (Basis)","refId":"B"},
+    {"expr":"hoval_ww_soll_c + hoval_offset_ww_k * (hoval_sg_status == bool 1)","legendFormat":"WW Ziel bei SG-Vorzug","refId":"C"}]},
+  {"id":3,"type":"timeseries","title":"Leistung","datasource":{"type":"prometheus","uid":"hoxpi-prom"},
+   "gridPos":{"h":9,"w":12,"x":0,"y":9},
+   "fieldConfig":{"defaults":{"unit":"kwatt","custom":{"lineWidth":2,"fillOpacity":15}},"overrides":[]},
+   "targets":[
+    {"expr":"hoval_p_el_kw","legendFormat":"elektrisch","refId":"A"},
+    {"expr":"hoval_p_th_kw","legendFormat":"thermisch","refId":"B"}]},
+  {"id":4,"type":"timeseries","title":"COP","datasource":{"type":"prometheus","uid":"hoxpi-prom"},
+   "gridPos":{"h":9,"w":12,"x":12,"y":9},
+   "fieldConfig":{"defaults":{"custom":{"lineWidth":2}},"overrides":[]},
+   "targets":[{"expr":"hoval_cop","legendFormat":"COP aktuell","refId":"A"}]},
+  {"id":5,"type":"timeseries","title":"Status (HK1 / HK2 / WW / Kühlventil)","datasource":{"type":"prometheus","uid":"hoxpi-prom"},
+   "gridPos":{"h":8,"w":12,"x":0,"y":18},
+   "fieldConfig":{"defaults":{"custom":{"lineWidth":2,"lineInterpolation":"stepAfter"}},"overrides":[]},
+   "targets":[
+    {"expr":"hoval_hc1_status","legendFormat":"HK1 (0=Aus 1=Heizen 9=Kühlen 26=SG)","refId":"A"},
+    {"expr":"hoval_hc2_status","legendFormat":"HK2","refId":"B"},
+    {"expr":"hoval_ww_status","legendFormat":"WW (1=Laden 8=Eco)","refId":"C"},
+    {"expr":"hoval_uka","legendFormat":"Kühlventil UKA","refId":"D"}]},
+  {"id":6,"type":"timeseries","title":"Smart Grid","datasource":{"type":"prometheus","uid":"hoxpi-prom"},
+   "gridPos":{"h":8,"w":12,"x":12,"y":18},
+   "fieldConfig":{"defaults":{"custom":{"lineWidth":2,"lineInterpolation":"stepAfter"}},"overrides":[]},
+   "targets":[
+    {"expr":"hoval_sg_status","legendFormat":"SG-Status (1=Vorzug)","refId":"A"},
+    {"expr":"hoval_offset_ww_k","legendFormat":"Offset WW [K]","refId":"B"},
+    {"expr":"hoval_offset_hk1_k","legendFormat":"Offset HK1 [K]","refId":"C"}]},
+  {"id":7,"type":"timeseries","title":"Tagesenergie elektrisch [kWh]","datasource":{"type":"prometheus","uid":"hoxpi-prom"},
+   "gridPos":{"h":8,"w":12,"x":0,"y":26},
+   "fieldConfig":{"defaults":{"unit":"kwatth","custom":{"drawStyle":"bars","fillOpacity":60}},"overrides":[]},
+   "targets":[{"expr":"increase(hoval_energie_el_mwh[24h]) * 1000","legendFormat":"Strom WP / 24h","refId":"A"}]},
+  {"id":8,"type":"timeseries","title":"Zählerstände [MWh]","datasource":{"type":"prometheus","uid":"hoxpi-prom"},
+   "gridPos":{"h":8,"w":12,"x":12,"y":26},
+   "fieldConfig":{"defaults":{"custom":{"lineWidth":2}},"overrides":[]},
+   "targets":[
+    {"expr":"hoval_energie_el_mwh","legendFormat":"Strom gesamt","refId":"A"},
+    {"expr":"hoval_waerme_heizen_mwh","legendFormat":"Wärme Heizen","refId":"B"},
+    {"expr":"hoval_waerme_ww_mwh","legendFormat":"Wärme WW","refId":"C"}]}
+ ]
+}

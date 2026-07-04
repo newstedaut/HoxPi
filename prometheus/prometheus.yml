@@ -1,0 +1,8 @@
+global:
+  scrape_interval: 30s
+  evaluation_interval: 60s
+
+scrape_configs:
+  - job_name: hoval
+    static_configs:
+      - targets: ['localhost:9101']

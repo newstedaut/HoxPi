@@ -1,0 +1,14 @@
+[Unit]
+Description=Hoval CAN (can0) 50 kbit/s
+After=network.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# Falls Adapter noch nicht da: kurz warten, dann hochfahren
+ExecStartPre=/bin/sh -c 'for i in 1 2 3 4 5; do ip link show can0 && break || sleep 2; done'
+ExecStart=/sbin/ip link set can0 up type can bitrate 50000
+ExecStop=/sbin/ip link set can0 down
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,12 @@
+[Unit]
+Description=HoxPi Dashboard (Port 80)
+After=network.target hoval-bridge.service
+
+[Service]
+ExecStart=/usr/bin/python3 /opt/hoxpi/hoval_status.py
+Restart=always
+# Port 80 + systemctl/nmcli (Statistik-Toggle, IP-Konfiguration) -> root
+User=root
+
+[Install]
+WantedBy=multi-user.target

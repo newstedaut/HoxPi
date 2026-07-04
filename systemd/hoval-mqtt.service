@@ -1,0 +1,14 @@
+[Unit]
+Description=HoxPi MQTT-Publisher (Bridge -> Mosquitto, HA-Discovery)
+After=network.target mosquitto.service hoval-bridge.service
+Wants=mosquitto.service
+
+[Service]
+Type=simple
+User=admin
+ExecStart=/usr/bin/python3 /home/admin/hoval-mqtt/hoval_mqtt.py
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
