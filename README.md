@@ -39,9 +39,9 @@ The installer asks to download the **official Hoval datapoint list** (xlsx) from
 
 ## Security notes
 
-- Run **only in a trusted home network**: the dashboard has no login (yet); the register write-permission page and the IP configuration would otherwise be exposed
+- **Two-factor authentication (TOTP)**: on the dashboard's *Security* page you can protect all write actions (register permissions, network/IP config, statistics toggle) with any authenticator app (Google/Microsoft Authenticator, Aegis, 1Password …) — scan the QR code, done. Sign-in lasts 30 days per browser; reading stays open. Strongly recommended before exposing the dashboard to a shared network
+- Run in a **trusted home network**; nothing leaves your network — no cloud, no telemetry
 - Writing starts disabled except for a small, curated whitelist; every write is additionally validated (range, rate limit, cold-cache)
-- Nothing leaves your network — no cloud, no telemetry
 
 ## Credits
 
@@ -89,9 +89,9 @@ Der Installer fragt nach der **offiziellen Hoval-Datenpunktliste** (xlsx) von ho
 
 ## Sicherheit
 
-- **Nur im vertrauenswürdigen Heimnetz betreiben** — das Dashboard hat (noch) keine Anmeldung
+- **Zwei-Faktor-Authentifizierung (TOTP)**: Auf der Dashboard-Seite *Sicherheit* lassen sich alle Schreibaktionen (Register-Freigaben, Netzwerk/IP, Statistik-Schalter) mit jeder Authenticator-App schützen (Google/Microsoft Authenticator, Aegis, 1Password …) — QR-Code scannen, fertig. Anmeldung hält 30 Tage pro Browser; Lesen bleibt frei. Vor dem Betrieb in geteilten Netzen dringend empfohlen
+- Im **vertrauenswürdigen Heimnetz** betreiben; es verlässt nichts dein Netzwerk — keine Cloud, keine Telemetrie
 - Schreiben ist ab Werk auf eine kleine, geprüfte Whitelist beschränkt; jeder Write wird zusätzlich validiert
-- Es verlässt nichts dein Netzwerk — keine Cloud, keine Telemetrie
 
 ## Danksagung
 

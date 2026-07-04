@@ -10,7 +10,7 @@ echo "=== HoxPi-Installation ==="
 
 echo "--- 1) Pakete ---"
 apt-get update
-apt-get install -y python3 python3-can python3-pymodbus python3-openpyxl can-utils curl
+apt-get install -y python3 python3-can python3-pymodbus python3-openpyxl python3-qrcode can-utils curl
 
 echo "--- 2) Hoval-Datenpunktliste ---"
 XLSX=$(ls ./*.xlsx 2>/dev/null | head -1 || true)
