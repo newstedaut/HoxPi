@@ -1,0 +1,15 @@
+[Unit]
+Description=HoxPi CAN <-> Modbus-TCP Bridge (fuer Hoval TopTronic E)
+After=network-online.target can0.service
+Wants=network-online.target can0.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /opt/hoxpi/hoval_bridge.py --enable-write
+Restart=on-failure
+RestartSec=5
+# Port 502 ist privilegiert -> Dienst laeuft als root (einfachster Weg)
+User=root
+
+[Install]
+WantedBy=multi-user.target
