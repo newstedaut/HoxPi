@@ -241,6 +241,59 @@ def net_info():
     except Exception:
         return None
 
+# ---------- 2FA (TOTP) für Schreibaktionen ----------
+AUTH_PATH = "/home/admin/hoval-bridge/auth.json"
+SESSIONS = {}          # token -> ablauf (unix)
+_auth_pending = {}     # {"secret": ...} während des Setups
+_auth_tries = []       # timestamps fehlgeschlagener Versuche (Rate-Limit)
+
+def auth_secret():
+    try:
+        return json.load(open(AUTH_PATH, encoding="utf-8")).get("secret")
+    except Exception:
+        return None
+
+def auth_enabled():
+    return auth_secret() is not None
+
+def _totp(secret_b32, t=None, step=30, digits=6):
+    import hmac, hashlib, struct, base64
+    key = base64.b32decode(secret_b32)
+    counter = int((_time.time() if t is None else t) // step)
+    h = hmac.new(key, struct.pack(">Q", counter), hashlib.sha1).digest()
+    o = h[19] & 0xF
+    code = (struct.unpack(">I", h[o:o + 4])[0] & 0x7FFFFFFF) % (10 ** digits)
+    return str(code).zfill(digits)
+
+def totp_ok(secret, code):
+    code = (code or "").strip().replace(" ", "")
+    now = _time.time()
+    return any(_totp(secret, now + d * 30) == code for d in (-1, 0, 1))
+
+def auth_rate_ok():
+    now = _time.time()
+    _auth_tries[:] = [t for t in _auth_tries if now - t < 300]
+    return len(_auth_tries) < 8
+
+def new_session():
+    import secrets as _secrets
+    tok = _secrets.token_hex(16)
+    SESSIONS[tok] = _time.time() + 30 * 86400
+    return tok
+
+def gen_secret():
+    import secrets as _secrets, base64
+    return base64.b32encode(_secrets.token_bytes(20)).decode()
+
+def qr_svg(uri):
+    try:
+        import qrcode, qrcode.image.svg, io
+        img = qrcode.make(uri, image_factory=qrcode.image.svg.SvgPathImage, box_size=5)
+        b = io.BytesIO(); img.save(b)
+        return b.getvalue().decode()
+    except Exception:
+        return ""
+
 # Eigene Zuordnung pro Anlage: labels.json = {"19659":"Untergeschoss", ...}
 LABELS_PATH = "/home/admin/hoval-bridge/labels.json"
 _lblc = {"t": 0, "v": {}}
@@ -444,6 +497,7 @@ def page(title, active, body, refresh=False, path="/"):
                                 ("alle","/alle",L("Alle Werte","All values")),
                                 ("register","/register",L("Register","Registers")),
                                 ("integration","/integration","Integration"),
+                                ("sicherheit","/sicherheit",L("Sicherheit","Security")),
                                 ])
     sw = (f'<div class="langsw">'
           f'<a class="{"on" if lg=="de" else ""}" href="{path}?lang=de" title="Deutsch">{FLAG_DE}</a>'
@@ -506,6 +560,7 @@ class H(http.server.BaseHTTPRequestHandler):
         elif p == "/alle":   body, rf, act = self.alle(), True, "alle"
         elif p == "/register": body, rf, act = self.register(), False, "register"
         elif p in ("/integration","/loxone","/homeassistant","/anleitung"): body, rf, act = self.integration() + self.stats_section() + self.netz_section() + self.anleitung().replace('<h1>', '<h2 class="sec" style="font-size:1.35rem;margin-top:2.2rem">', 1).replace('</h1>', '</h2>', 1), False, "integration"
+        elif p == "/sicherheit": body, rf, act = self.sicherheit(), False, "sicherheit"
         else:                body, rf, act = self.home(), False, "home"
         out = page(act.title(), act, body, rf, path=p).encode("utf-8")
         self.send_response(200); self.send_header("Content-Type","text/html; charset=utf-8")
@@ -514,6 +569,15 @@ class H(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         pr = urlparse(self.path)
+        if pr.path == "/api/auth/setup":
+            self.api_auth_setup(); return
+        if pr.path == "/api/auth/login":
+            self.api_auth_login(); return
+        if pr.path == "/api/auth/off":
+            self.api_auth_off(); return
+        if auth_enabled() and not self.session_ok():
+            self.json_out({"ok": False, "fehler": "Nicht angemeldet - bitte auf der Seite 'Sicherheit' den 2FA-Code eingeben / Not signed in - enter your 2FA code on the 'Security' page"}, 401)
+            return
         if pr.path == "/api/stats":
             self.api_stats(); return
         if pr.path == "/api/network":
@@ -763,6 +827,131 @@ function stoggle(on){
 }
 </script>"""
           + '</div></div>')
+
+    def json_out(self, obj, status=200, cookie=None):
+        data = json.dumps(obj).encode()
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(data)))
+        if cookie:
+            self.send_header("Set-Cookie", cookie)
+        self.end_headers()
+        self.wfile.write(data)
+
+    def session_ok(self):
+        for part in self.headers.get("Cookie", "").split(";"):
+            part = part.strip()
+            if part.startswith("hoxpi_session="):
+                tok = part.split("=", 1)[1]
+                exp = SESSIONS.get(tok)
+                if exp and exp > _time.time():
+                    return True
+        return False
+
+    def _read_json(self):
+        ln = int(self.headers.get("Content-Length", 0))
+        return json.loads(self.rfile.read(ln) or b"{}")
+
+    def api_auth_setup(self):
+        try:
+            body = self._read_json()
+            if auth_enabled():
+                self.json_out({"ok": False, "fehler": "2FA ist schon aktiv"}); return
+            sec = _auth_pending.get("secret")
+            if not sec:
+                self.json_out({"ok": False, "fehler": "Kein Setup gestartet - Seite Sicherheit neu laden"}); return
+            if not auth_rate_ok():
+                self.json_out({"ok": False, "fehler": "Zu viele Versuche - 5 Minuten warten"}, 429); return
+            if not totp_ok(sec, body.get("code", "")):
+                _auth_tries.append(_time.time())
+                self.json_out({"ok": False, "fehler": "Code falsch - Uhrzeit am Handy pruefen und neu versuchen"}); return
+            import os as _os
+            fd = _os.open(AUTH_PATH, _os.O_WRONLY | _os.O_CREAT | _os.O_TRUNC, 0o600)
+            with _os.fdopen(fd, "w", encoding="utf-8") as f:
+                json.dump({"secret": sec, "aktiviert": datetime.datetime.now().isoformat(timespec="seconds")}, f)
+            _auth_pending.clear()
+            tok = new_session()
+            self.json_out({"ok": True}, cookie=f"hoxpi_session={tok}; Path=/; Max-Age=2592000; HttpOnly; SameSite=Lax")
+        except Exception as e:
+            self.json_out({"ok": False, "fehler": str(e)})
+
+    def api_auth_login(self):
+        try:
+            body = self._read_json()
+            sec = auth_secret()
+            if not sec:
+                self.json_out({"ok": False, "fehler": "2FA ist nicht eingerichtet"}); return
+            if not auth_rate_ok():
+                self.json_out({"ok": False, "fehler": "Zu viele Versuche - 5 Minuten warten"}, 429); return
+            if not totp_ok(sec, body.get("code", "")):
+                _auth_tries.append(_time.time())
+                self.json_out({"ok": False, "fehler": "Code falsch"}); return
+            tok = new_session()
+            self.json_out({"ok": True}, cookie=f"hoxpi_session={tok}; Path=/; Max-Age=2592000; HttpOnly; SameSite=Lax")
+        except Exception as e:
+            self.json_out({"ok": False, "fehler": str(e)})
+
+    def api_auth_off(self):
+        try:
+            body = self._read_json()
+            sec = auth_secret()
+            if not sec:
+                self.json_out({"ok": False, "fehler": "2FA ist nicht aktiv"}); return
+            if not (self.session_ok() and totp_ok(sec, body.get("code", ""))):
+                _auth_tries.append(_time.time())
+                self.json_out({"ok": False, "fehler": "Angemeldete Sitzung + gueltiger Code noetig"}); return
+            import os as _os
+            _os.remove(AUTH_PATH)
+            SESSIONS.clear()
+            self.json_out({"ok": True})
+        except Exception as e:
+            self.json_out({"ok": False, "fehler": str(e)})
+
+    def sicherheit(self):
+        js = """<script>
+function apost(url, body, msgid){
+ document.getElementById(msgid).textContent='...';
+ fetch(url,{method:'POST',body:JSON.stringify(body)}).then(function(r){return r.json();}).then(function(j){
+  if(j.ok){location.reload();}else{document.getElementById(msgid).textContent=j.fehler;}
+ }).catch(function(e){document.getElementById(msgid).textContent='Fehler: '+e;});
+}
+</script>"""
+        out = ['<h1>' + L("Sicherheit", "Security") + '</h1>']
+        if not auth_enabled():
+            sec = _auth_pending.setdefault("secret", gen_secret())
+            uri = "otpauth://totp/HoxPi?secret=" + sec + "&issuer=HoxPi"
+            qr = qr_svg(uri)
+            out.append('<div class="note warn">' + L(
+              "Schreibaktionen (Register-Freigaben, Netzwerk, Statistik-Schalter) sind aktuell <b>ohne Anmeldung</b> moeglich - ok im vertrauensvollen Heimnetz, aber besser mit Schutz.",
+              "Write actions (register permissions, network, statistics toggle) are currently possible <b>without sign-in</b> - fine in a trusted home network, but better protected.") + '</div>')
+            out.append('<div class="domain"><div class="dh"><span class="ic">\U0001F510</span><h2>' + L("Zwei-Faktor-Schutz einrichten (empfohlen)", "Set up two-factor protection (recommended)") + '</h2></div><div class="dbody">')
+            out.append('<ol style="line-height:1.9">')
+            out.append('<li>' + L("Authenticator-App oeffnen (Google Authenticator, Microsoft Authenticator, Aegis, 1Password ...)", "Open an authenticator app (Google Authenticator, Microsoft Authenticator, Aegis, 1Password ...)") + '</li>')
+            out.append('<li>' + L("QR-Code scannen", "Scan the QR code") + (' <b>' + L("oder Schluessel manuell eingeben:", "or enter the key manually:") + '</b>' if not qr else ':') + '</li></ol>')
+            if qr:
+                out.append('<div style="background:#fff;display:inline-block;padding:10px;border:1px solid #e1e5ec;border-radius:10px">' + qr + '</div>')
+            out.append('<p><code style="font-size:1.05rem;letter-spacing:1px">' + html.escape(sec) + '</code></p>')
+            out.append('<p>3. ' + L("Den 6-stelligen Code aus der App eingeben:", "Enter the 6-digit code from the app:") + ' <input id="scode" inputmode="numeric" maxlength="6" style="width:90px;padding:.4rem;font-size:1.1rem;letter-spacing:2px"> '
+                       '<button onclick="apost(\'/api/auth/setup\',{code:document.getElementById(\'scode\').value},\'smsg\')" style="background:#0a8f4f;color:#fff;border:0;border-radius:8px;padding:.55rem 1.2rem;font-weight:700;cursor:pointer">' + L("Aktivieren", "Enable") + '</button> <span id="smsg" style="color:#d6202f"></span></p>')
+            out.append('<div class="note">' + L("Danach verlangen alle Schreibaktionen einmalig den Code; die Anmeldung haelt 30 Tage pro Browser (Cookie). Lesen bleibt frei.", "Afterwards all write actions require the code once; the sign-in lasts 30 days per browser (cookie). Reading stays open.") + '</div>')
+            out.append('</div></div>')
+        else:
+            logged = self.session_ok()
+            out.append('<div class="note ok">' + L("2FA ist <b>aktiv</b>. Schreibaktionen erfordern eine Anmeldung.", "2FA is <b>enabled</b>. Write actions require sign-in.") + '</div>')
+            if logged:
+                out.append('<p>' + L("Du bist auf diesem Geraet <b>angemeldet</b> (30 Tage).", "You are <b>signed in</b> on this device (30 days).") + '</p>')
+            else:
+                out.append('<div class="domain"><div class="dh"><span class="ic">\U0001F511</span><h2>' + L("Anmelden", "Sign in") + '</h2></div><div class="dbody"><p>'
+                           + L("6-stelliger Code aus der Authenticator-App:", "6-digit code from your authenticator app:")
+                           + ' <input id="lcode" inputmode="numeric" maxlength="6" style="width:90px;padding:.4rem;font-size:1.1rem;letter-spacing:2px"> '
+                           '<button onclick="apost(\'/api/auth/login\',{code:document.getElementById(\'lcode\').value},\'lmsg\')" style="background:#e2001a;color:#fff;border:0;border-radius:8px;padding:.55rem 1.2rem;font-weight:700;cursor:pointer">' + L("Anmelden", "Sign in") + '</button> <span id="lmsg" style="color:#d6202f"></span></p></div></div>')
+            out.append('<div class="domain"><div class="dh" style="background:#6c7787"><span class="ic">\u26A0</span><h2>' + L("2FA deaktivieren", "Disable 2FA") + '</h2></div><div class="dbody"><p>'
+                       + L("Nur mit aktiver Anmeldung + aktuellem Code:", "Requires active sign-in + current code:")
+                       + ' <input id="ocode" inputmode="numeric" maxlength="6" style="width:90px;padding:.4rem"> '
+                       '<button onclick="apost(\'/api/auth/off\',{code:document.getElementById(\'ocode\').value},\'omsg\')" style="background:#6c7787;color:#fff;border:0;border-radius:8px;padding:.5rem 1rem;cursor:pointer">' + L("Deaktivieren", "Disable") + '</button> <span id="omsg" style="color:#d6202f"></span></p>'
+                       + '<div class="note warn">' + L("Handy verloren? Auf der Pi <code>sudo rm /home/admin/hoval-bridge/auth.json</code> ausfuehren und den Dashboard-Dienst neu starten - dann ist der Schutz zurueckgesetzt.", "Lost your phone? Run <code>sudo rm /home/admin/hoval-bridge/auth.json</code> on the Pi and restart the dashboard service to reset protection.") + '</div></div></div>')
+        out.append(js)
+        return "".join(out)
 
     def home(self):
         return f"""<h1>{L("Deine Hoval-Anlage im Netzwerk","Your Hoval system on the network")}</h1>
