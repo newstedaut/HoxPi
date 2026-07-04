@@ -1,0 +1,12 @@
+[Unit]
+Description=HoxPi MCP-Server (KI-Schnittstelle, Port 8808)
+After=hoval-bridge.service
+
+[Service]
+ExecStart=/home/admin/hoxpi-mcp-venv/bin/python /home/admin/hoxpi-mcp/hoxpi_mcp.py
+Restart=always
+RestartSec=5
+User=root
+
+[Install]
+WantedBy=multi-user.target
