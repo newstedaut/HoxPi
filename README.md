@@ -42,6 +42,7 @@ The installer asks to download the **official Hoval datapoint list** (xlsx) from
 ## Credits
 
 Protocol knowledge builds on the great reverse-engineering work of
+[hpoeckl/hoval-exporter](https://github.com/hpoeckl/hoval-exporter) (MIT),
 [zittix/Hoval-GW](https://github.com/zittix/Hoval-GW),
 [chrishrb/hoval-gateway](https://github.com/chrishrb/hoval-gateway) (Apache-2.0) and
 [parren/hoval-ultrasource-agent](https://github.com/parren/hoval-ultrasource-agent) (MIT).
@@ -87,6 +88,7 @@ Der Installer fragt nach der **offiziellen Hoval-Datenpunktliste** (xlsx) von ho
 ## Danksagung
 
 Das Protokoll-Wissen baut auf der Reverse-Engineering-Arbeit von
+[hpoeckl/hoval-exporter](https://github.com/hpoeckl/hoval-exporter) (MIT),
 [zittix/Hoval-GW](https://github.com/zittix/Hoval-GW),
 [chrishrb/hoval-gateway](https://github.com/chrishrb/hoval-gateway) (Apache-2.0) und
 [parren/hoval-ultrasource-agent](https://github.com/parren/hoval-ultrasource-agent) (MIT) auf.
