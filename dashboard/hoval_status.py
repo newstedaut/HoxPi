@@ -564,7 +564,7 @@ class H(http.server.BaseHTTPRequestHandler):
         if p == "/werte":    body, rf, act = self.werte(), True, "werte"
         elif p == "/alle":   body, rf, act = self.alle(), True, "alle"
         elif p == "/register": body, rf, act = self.register(), False, "register"
-        elif p in ("/integration","/loxone","/homeassistant","/anleitung"): body, rf, act = self.integration() + self.stats_section() + self.netz_section() + self.anleitung().replace('<h1>', '<h2 class="sec" style="font-size:1.35rem;margin-top:2.2rem">', 1).replace('</h1>', '</h2>', 1), False, "integration"
+        elif p in ("/integration","/loxone","/homeassistant","/anleitung"): body, rf, act = self.integration() + self.stats_section() + self.mcp_section() + self.netz_section() + self.anleitung().replace('<h1>', '<h2 class="sec" style="font-size:1.35rem;margin-top:2.2rem">', 1).replace('</h1>', '</h2>', 1), False, "integration"
         elif p == "/sicherheit": body, rf, act = self.sicherheit(), False, "sicherheit"
         else:                body, rf, act = self.home(), False, "home"
         out = page(act.title(), act, body, rf, path=p).encode("utf-8")
@@ -957,6 +957,25 @@ function apost(url, body, msgid){
                        + '<div class="note warn">' + L("Handy verloren? Auf der Pi <code>sudo rm /home/admin/hoval-bridge/auth.json</code> ausfuehren und den Dashboard-Dienst neu starten - dann ist der Schutz zurueckgesetzt.", "Lost your phone? Run <code>sudo rm /home/admin/hoval-bridge/auth.json</code> on the Pi and restart the dashboard service to reset protection.") + '</div></div></div>')
         out.append(js)
         return "".join(out)
+
+    def mcp_section(self):
+        import subprocess
+        try:
+            st = subprocess.run(["systemctl", "is-active", "hoxpi-mcp"], capture_output=True, text=True, timeout=5).stdout.strip()
+        except Exception:
+            st = "?"
+        if st != "active":
+            return ""
+        return ('<div class="domain"><div class="dh" style="background:#7c4dbe;background-image:linear-gradient(90deg,rgba(255,255,255,.15),rgba(255,255,255,0))"><span class="ic">\U0001F916</span><h2>'
+          + L("KI-Assistent (MCP)", "AI assistant (MCP)") + '</h2></div><div class="dbody">'
+          + '<p>' + L("HoxPi hat eine eingebaute <b>KI-Schnittstelle</b> (Model Context Protocol). Damit kann ein KI-Assistent wie Claude die Anlage live inspizieren, Werte erkl\u00e4ren, die Historie auswerten und Fehler eingrenzen \u2013 in normaler Sprache (\u201eWarum l\u00e4dt das Warmwasser nicht?\u201c).",
+              "HoxPi has a built-in <b>AI interface</b> (Model Context Protocol). An AI assistant like Claude can inspect the system live, explain values, analyse history and narrow down faults \u2013 in plain language.") + '</p>'
+          + '<p>' + L("Einrichten (Claude, kostenloser Account reicht): <b>Einstellungen \u2192 Connectors \u2192 Add custom connector</b> und diese Adresse eintragen:", "Set up (Claude): <b>Settings \u2192 Connectors \u2192 Add custom connector</b> and enter this address:") + '</p>'
+          + '<p><code id="mcpurl" style="font-size:1.02rem">http://\u2026:8808/mcp</code></p>'
+          + '<script>document.getElementById("mcpurl").textContent="http://"+location.hostname+":8808/mcp";</script>'
+          + '<div class="note">' + L("Werkzeuge: Status, Diagnose, Register lesen/suchen, Historie (Grafana-Daten), Whitelist ansehen. <b>Schreiben ist standardm\u00e4\u00dfig deaktiviert</b> \u2013 aktivierbar in /home/admin/hoxpi-mcp/config.json (enable_write), jede \u00c4nderung braucht zus\u00e4tzlich eine Best\u00e4tigung und l\u00e4uft durch alle Bridge-Sicherungen.",
+              "Tools: status, diagnosis, read/search registers, history (Grafana data), view whitelist. <b>Writing is disabled by default</b> \u2013 enable via /home/admin/hoxpi-mcp/config.json (enable_write); every change also needs an explicit confirmation and passes all bridge safeguards.") + '</div>'
+          + '</div></div>')
 
     def home(self):
         return f"""<h1>{L("Deine Hoval-Anlage im Netzwerk","Your Hoval system on the network")}</h1>

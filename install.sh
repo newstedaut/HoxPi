@@ -74,6 +74,20 @@ if [ "$a" = "j" ] || [ "$a" = "J" ]; then
   systemctl enable --now prometheus grafana-server
 fi
 
+echo "--- 6) Optional: KI-Schnittstelle (MCP-Server) ---"
+if [ "$YES" = "1" ]; then a=j; else read -r -p "MCP-Server installieren (KI-Assistenten wie Claude koennen die Anlage inspizieren)? [j/N] " a; fi
+if [ "$a" = "j" ] || [ "$a" = "J" ]; then
+  python3 -m venv /home/admin/hoxpi-mcp-venv 2>/dev/null || python3 -m venv /opt/hoxpi/mcp-venv
+  VENV=/home/admin/hoxpi-mcp-venv; [ -d "$VENV" ] || VENV=/opt/hoxpi/mcp-venv
+  $VENV/bin/pip install --quiet mcp
+  mkdir -p /home/admin/hoxpi-mcp
+  install -m 755 mcp/hoxpi_mcp.py /home/admin/hoxpi-mcp/
+  [ -f /home/admin/hoxpi-mcp/config.json ] || echo '{"enable_write": false, "port": 8808}' > /home/admin/hoxpi-mcp/config.json
+  install -m 644 systemd/hoxpi-mcp.service /etc/systemd/system/
+  systemctl daemon-reload
+  systemctl enable --now hoxpi-mcp
+fi
+
 echo ""
 echo "=== Fertig ==="
 echo "Dashboard:  http://<pi-ip>/            (Uebersicht, Register, Integration)"
