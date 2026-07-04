@@ -30,10 +30,14 @@ CAN wiring: tap the bus **in parallel** at the Hoval **WEZ module**, terminal "+
 
 ## Install
 
+**Quick install** (Raspberry Pi OS / Debian, flash with the Raspberry Pi Imager and enable SSH there, then):
+
 ```bash
-git clone <this repo> && cd hoxpi
-sudo bash install.sh
+git clone https://github.com/newstedaut/HoxPi.git hoxpi && cd hoxpi
+sudo bash install.sh --yes   # fully automatic incl. Grafana; omit --yes for interactive
 ```
+
+Afterwards open `http://<pi-ip>/` — done. Recommended first step: set up 2FA on the *Security* page.
 
 The installer asks to download the **official Hoval datapoint list** (xlsx) from hoval.com — it is **not** included in this repository for copyright reasons. Two small generators (`tools/gen_registers.py`, `tools/gen_reg_texts.py`) build `registers.json` (register map) and `reg_texts.json` (names + descriptions DE/EN) from it locally.
 

@@ -1,8 +1,10 @@
 #!/bin/bash
 # HoxPi-Installation auf Raspberry Pi (Debian 12/13 bzw. Raspberry Pi OS, arm64)
-# Als root ausfuehren: sudo bash install.sh
+# Als root ausfuehren: sudo bash install.sh          (interaktiv)
+#                      sudo bash install.sh --yes    (alles automatisch, inkl. Grafana)
 # Getestet auf: Raspberry Pi 4 (2 GB), Debian 13, USB-CAN DSD-TECH SH-C30G
 set -e
+YES=0; [ "$1" = "--yes" ] && YES=1
 cd "$(dirname "$0")"
 
 echo "=== HoxPi-Installation ==="
@@ -18,7 +20,7 @@ if [ -z "$XLSX" ]; then
   echo "Keine xlsx gefunden. Bitte die offizielle Hoval-Datenpunktliste herunterladen"
   echo "  https://www.hoval.com/misc/TTE/TTE-GW-Modbus-datapoints.xlsx"
   echo "und neben install.sh legen (wird aus Urheberrechtsgruenden nicht mitgeliefert)."
-  read -r -p "Jetzt automatisch herunterladen? [j/N] " a
+  if [ "$YES" = "1" ]; then a=j; else read -r -p "Jetzt automatisch herunterladen? [j/N] " a; fi
   if [ "$a" = "j" ] || [ "$a" = "J" ]; then
     curl -fL -o TTE-GW-Modbus-datapoints.xlsx "https://www.hoval.com/misc/TTE/TTE-GW-Modbus-datapoints.xlsx"
     XLSX=./TTE-GW-Modbus-datapoints.xlsx
@@ -53,7 +55,7 @@ systemctl enable --now can0 2>/dev/null || echo "can0.service pruefen (USB-CAN a
 systemctl enable --now hoval-bridge hoval-status hoval-exporter
 
 echo "--- 5) Optional: Statistik (Prometheus + Grafana) ---"
-read -r -p "Grafana-Statistik installieren (ca. 150 MB)? [j/N] " a
+if [ "$YES" = "1" ]; then a=j; else read -r -p "Grafana-Statistik installieren (ca. 150 MB)? [j/N] " a; fi
 if [ "$a" = "j" ] || [ "$a" = "J" ]; then
   apt-get install -y --no-install-recommends prometheus
   install -m 644 prometheus/prometheus.yml /etc/prometheus/prometheus.yml
