@@ -1,4 +1,8 @@
+<img src="logo.svg" alt="HoxPi" width="240">
+
 # HoxPi — open gateway for Hoval® TopTronic® E
+
+[![Buy Me a Coffee](https://img.shields.io/badge/☕-Buy%20me%20a%20coffee-ffdd00)](https://buymeacoffee.com/bernhardsu9)
 
 **Raspberry Pi + USB-CAN adapter = a drop-in replacement for the Hoval Modbus gateway.**
 HoxPi passively reads the CAN bus of a Hoval® TopTronic® E system (heat pump, ventilation, buffer module) and exposes every datapoint as **Modbus-TCP (port 502)** — exactly like the original HovalConnect Modbus gateway. The official **Loxone Hoval templates work 1:1**, Home Assistant gets a ready-made config, and an optional **Grafana stack** provides long-term charts. Entirely local, no cloud.
@@ -48,6 +52,10 @@ Protocol knowledge builds on the great reverse-engineering work of
 [parren/hoval-ultrasource-agent](https://github.com/parren/hoval-ultrasource-agent) (MIT).
 No code was copied from these projects; HoxPi is an independent implementation.
 
+## Support
+
+HoxPi is free and develops in my spare time. If it saves you the commercial gateway, consider [buying me a coffee ☕](https://buymeacoffee.com/bernhardsu9) — it funds test hardware and keeps the project going.
+
 ## License
 
 [MIT](LICENSE)
@@ -93,6 +101,10 @@ Das Protokoll-Wissen baut auf der Reverse-Engineering-Arbeit von
 [chrishrb/hoval-gateway](https://github.com/chrishrb/hoval-gateway) (Apache-2.0) und
 [parren/hoval-ultrasource-agent](https://github.com/parren/hoval-ultrasource-agent) (MIT) auf.
 Es wurde kein Code übernommen — HoxPi ist eine eigenständige Implementierung.
+
+## Unterstützen
+
+HoxPi ist kostenlos und entsteht in meiner Freizeit. Wenn es dir den kommerziellen Gateway erspart: [Spendier mir einen Kaffee ☕](https://buymeacoffee.com/bernhardsu9) — das finanziert Test-Hardware und hält das Projekt am Leben.
 
 ## Lizenz
 
