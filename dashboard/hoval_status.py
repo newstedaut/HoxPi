@@ -311,24 +311,42 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
 Write-Host 'Beende Claude (falls offen) ...'
 Get-Process claude -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep 5
-$dir = Join-Path $env:APPDATA 'Claude'
-New-Item -ItemType Directory -Force -Path $dir | Out-Null
-$p = Join-Path $dir 'claude_desktop_config.json'
-Write-Host ('Konfiguration: ' + $p)
-if (Test-Path $p) { $cfg = Get-Content $p -Raw | ConvertFrom-Json; Copy-Item $p ($p + '.bak') -Force }
-else { $cfg = [PSCustomObject]@{} }
-if (-not $cfg.PSObject.Properties['mcpServers']) {
-  $cfg | Add-Member -MemberType NoteProperty -Name mcpServers -Value ([PSCustomObject]@{})
+# Ziel-Configs: klassisch + Microsoft-Store (MSIX-virtualisiert), beide bedienen
+$targets = @()
+$classic = Join-Path $env:APPDATA 'Claude'
+if (Test-Path $classic) { $targets += (Join-Path $classic 'claude_desktop_config.json') }
+$pkg = Get-ChildItem (Join-Path $env:LOCALAPPDATA 'Packages') -Directory -Filter 'Claude_*' -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($pkg) {
+  $vdir = Join-Path $pkg.FullName 'LocalCache\\Roaming\\Claude'
+  New-Item -ItemType Directory -Force -Path $vdir | Out-Null
+  $targets += (Join-Path $vdir 'claude_desktop_config.json')
 }
-$hox = [PSCustomObject]@{ command = 'npx'; args = @('-y','mcp-remote','http://HOSTIP:8808/mcp','--allow-http') }
-if ($cfg.mcpServers.PSObject.Properties['hoxpi']) { $cfg.mcpServers.hoxpi = $hox }
-else { $cfg.mcpServers | Add-Member -MemberType NoteProperty -Name hoxpi -Value $hox }
-$json = $cfg | ConvertTo-Json -Depth 10
-try { Set-Content -Path $p -Value $json -Encoding UTF8 }
-catch { Start-Sleep 3; Set-Content -Path $p -Value $json -Encoding UTF8 }
+if ($targets.Count -eq 0) { $targets = @(Join-Path $classic 'claude_desktop_config.json') }
+foreach ($p in $targets) {
+  Write-Host ('Konfiguration: ' + $p)
+  if (Test-Path $p) { $cfg = Get-Content $p -Raw | ConvertFrom-Json; Copy-Item $p ($p + '.bak') -Force }
+  else { $cfg = [PSCustomObject]@{} }
+  if (-not $cfg.PSObject.Properties['mcpServers']) {
+    $cfg | Add-Member -MemberType NoteProperty -Name mcpServers -Value ([PSCustomObject]@{})
+  }
+  $hox = [PSCustomObject]@{ command = 'npx'; args = @('-y','mcp-remote','http://HOSTIP:8808/mcp','--allow-http') }
+  if ($cfg.mcpServers.PSObject.Properties['hoxpi']) { $cfg.mcpServers.hoxpi = $hox }
+  else { $cfg.mcpServers | Add-Member -MemberType NoteProperty -Name hoxpi -Value $hox }
+  $json = $cfg | ConvertTo-Json -Depth 10
+  try { Set-Content -Path $p -Value $json -Encoding UTF8 }
+  catch { Start-Sleep 3; Set-Content -Path $p -Value $json -Encoding UTF8 }
+}
 Write-Host 'HoxPi eingetragen. Claude wird gestartet...'
-$exe = Join-Path $env:LOCALAPPDATA 'AnthropicClaude\\claude.exe'
-if (Test-Path $exe) { Start-Process $exe } else { Write-Host 'Bitte Claude manuell starten.' }
+$gestartet = $false
+if ($pkg) {
+  $app = Get-StartApps | Where-Object { $_.AppID -like ($pkg.Name + '*') } | Select-Object -First 1
+  if ($app) { Start-Process ('shell:AppsFolder\\' + $app.AppID); $gestartet = $true }
+}
+if (-not $gestartet) {
+  $exe = Join-Path $env:LOCALAPPDATA 'AnthropicClaude\\claude.exe'
+  if (Test-Path $exe) { Start-Process $exe; $gestartet = $true }
+}
+if (-not $gestartet) { Write-Host 'Bitte Claude manuell starten.' }
 Write-Host 'FERTIG! In Claude einfach fragen: Wie geht es meiner Heizung?'
 """.replace("HOSTIP", host)
 
