@@ -299,6 +299,62 @@ def qr_svg(uri):
     except Exception:
         return ""
 
+# ---------- 1-Klick-Setup fuer Claude Desktop ----------
+def claude_setup_ps1(host):
+    return """$ErrorActionPreference = 'Stop'
+Write-Host '=== HoxPi -> Claude Desktop Einrichtung ==='
+if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
+  Write-Host 'Node.js fehlt! Die Download-Seite wird geoeffnet - installieren, dann Setup erneut ausfuehren.'
+  Start-Process 'https://nodejs.org/'
+  exit 1
+}
+Get-Process Claude -ErrorAction SilentlyContinue | Stop-Process -Force
+Start-Sleep 2
+$p = Join-Path $env:APPDATA 'Claude\\claude_desktop_config.json'
+if (Test-Path $p) { $cfg = Get-Content $p -Raw | ConvertFrom-Json; Copy-Item $p ($p + '.bak') -Force }
+else { $cfg = [PSCustomObject]@{} }
+if (-not $cfg.PSObject.Properties['mcpServers']) {
+  $cfg | Add-Member -MemberType NoteProperty -Name mcpServers -Value ([PSCustomObject]@{})
+}
+$hox = [PSCustomObject]@{ command = 'npx'; args = @('-y','mcp-remote','http://HOSTIP:8808/mcp','--allow-http') }
+if ($cfg.mcpServers.PSObject.Properties['hoxpi']) { $cfg.mcpServers.hoxpi = $hox }
+else { $cfg.mcpServers | Add-Member -MemberType NoteProperty -Name hoxpi -Value $hox }
+$cfg | ConvertTo-Json -Depth 10 | Set-Content $p -Encoding UTF8
+Write-Host 'HoxPi eingetragen. Claude wird gestartet...'
+$exe = Join-Path $env:LOCALAPPDATA 'AnthropicClaude\\claude.exe'
+if (Test-Path $exe) { Start-Process $exe } else { Write-Host 'Bitte Claude manuell starten.' }
+Write-Host 'FERTIG! In Claude einfach fragen: Wie geht es meiner Heizung?'
+""".replace("HOSTIP", host)
+
+def claude_setup_bat(host):
+    lines = ["@echo off",
+             "echo === HoxPi: Claude Desktop wird eingerichtet ===",
+             "powershell -NoProfile -ExecutionPolicy Bypass -Command \"Invoke-RestMethod http://HOSTIP/hoxpi-claude-setup.ps1 | Invoke-Expression\"".replace("HOSTIP", host),
+             "echo.",
+             "pause"]
+    return "\r\n".join(lines) + "\r\n"
+
+def claude_setup_sh(host):
+    return """#!/bin/bash
+# HoxPi -> Claude Desktop (macOS). Ausfuehren: bash hoxpi-claude-setup.sh
+command -v node >/dev/null || { echo "Node.js fehlt: https://nodejs.org"; exit 1; }
+osascript -e 'quit app "Claude"' 2>/dev/null; sleep 2
+python3 - << 'EOF'
+import json, os, shutil
+p = os.path.expanduser('~/Library/Application Support/Claude/claude_desktop_config.json')
+cfg = {}
+if os.path.exists(p):
+    shutil.copy(p, p + '.bak')
+    cfg = json.load(open(p))
+cfg.setdefault('mcpServers', {})['hoxpi'] = {
+    "command": "npx", "args": ["-y", "mcp-remote", "http://HOSTIP:8808/mcp", "--allow-http"]}
+json.dump(cfg, open(p, 'w'), indent=2)
+print('HoxPi eingetragen.')
+EOF
+open -a Claude 2>/dev/null || echo "Bitte Claude manuell starten."
+echo "FERTIG! In Claude einfach fragen: Wie geht es meiner Heizung?"
+""".replace("HOSTIP", host)
+
 # Eigene Zuordnung pro Anlage: labels.json = {"19659":"Untergeschoss", ...}
 LABELS_PATH = "/home/admin/hoval-bridge/labels.json"
 _lblc = {"t": 0, "v": {}}
@@ -554,6 +610,20 @@ class H(http.server.BaseHTTPRequestHandler):
         else:
             lang = "de"
         _ctx.lang = lang
+        if p in ("/hoxpi-claude-setup.bat", "/hoxpi-claude-setup.ps1", "/hoxpi-claude-setup.sh"):
+            host = (self.headers.get("Host") or "192.168.1.168").split(":")[0]
+            if p.endswith(".bat"):
+                data = claude_setup_bat(host).encode("utf-8")
+            elif p.endswith(".sh"):
+                data = claude_setup_sh(host).encode("utf-8")
+            else:
+                data = claude_setup_ps1(host).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; charset=utf-8")
+            if not p.endswith(".ps1"):
+                self.send_header("Content-Disposition", 'attachment; filename="' + p.strip("/") + '"')
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers(); self.wfile.write(data); return
         if p == "/hoxpi-ha.yaml":
             data = ha_yaml().encode("utf-8")
             self.send_response(200)
@@ -969,16 +1039,20 @@ function apost(url, body, msgid){
         pre = ('"hoxpi": {\n  "command": "npx",\n  "args": ["-y", "mcp-remote", "http://HOSTIP:8808/mcp", "--allow-http"]\n}')
         return ('<div class="domain"><div class="dh" style="background:#7c4dbe;background-image:linear-gradient(90deg,rgba(255,255,255,.15),rgba(255,255,255,0))"><span class="ic">\U0001F916</span><h2>'
           + L("KI-Assistent (MCP)", "AI assistant (MCP)") + '</h2></div><div class="dbody">'
-          + '<p>' + L("HoxPi hat eine eingebaute <b>KI-Schnittstelle</b> (Model Context Protocol). Damit kann ein KI-Assistent wie Claude die Anlage live inspizieren, Werte erkl\u00e4ren, die Historie auswerten und Fehler eingrenzen \u2013 in normaler Sprache (\u201eWarum l\u00e4dt das Warmwasser nicht?\u201c).",
-              "HoxPi has a built-in <b>AI interface</b> (Model Context Protocol). An AI assistant like Claude can inspect the system live, explain values, analyse history and narrow down faults \u2013 in plain language.") + '</p>'
-          + '<p>' + L("Einbindung in <b>Claude Desktop</b> (braucht Node.js): Claude komplett beenden (auch Tray-Icon), dann in der Datei <code>claude_desktop_config.json</code> (Windows: <code>%APPDATA%\\Claude</code> \u00b7 macOS: <code>~/Library/Application Support/Claude</code>) unter <code>mcpServers</code> diesen Block eintragen und Claude neu starten:",
-              "Add to <b>Claude Desktop</b> (needs Node.js): quit Claude completely (incl. tray icon), then add this block under <code>mcpServers</code> in <code>claude_desktop_config.json</code> (Windows: <code>%APPDATA%\\Claude</code> \u00b7 macOS: <code>~/Library/Application Support/Claude</code>) and restart Claude:") + '</p>'
+          + '<p>' + L("HoxPi hat eine eingebaute <b>KI-Schnittstelle</b>: Ein Assistent wie Claude kann die Anlage live inspizieren, Werte erkl\u00e4ren, die Historie auswerten und Fehler eingrenzen \u2013 in normaler Sprache (\u201eWarum l\u00e4dt das Warmwasser nicht?\u201c). Einzige Voraussetzung auf dem PC: <a href=\"https://nodejs.org\" target=\"_blank\">Node.js</a>.",
+              "HoxPi has a built-in <b>AI interface</b>: an assistant like Claude can inspect the system live, explain values, analyse history and narrow down faults \u2013 in plain language. Only requirement on the PC: <a href=\"https://nodejs.org\" target=\"_blank\">Node.js</a>.") + '</p>'
+          + '<div style="margin:.6rem 0 1rem">'
+          + '<a href="/hoxpi-claude-setup.bat" style="display:inline-block;background:#7c4dbe;color:#fff;font-weight:700;padding:.7rem 1.4rem;border-radius:10px;text-decoration:none">\u2B07 ' + L("Claude-Einrichtung (Windows)", "Claude setup (Windows)") + '</a> '
+          + '<a href="/hoxpi-claude-setup.sh" style="display:inline-block;background:#9b7bd4;color:#fff;font-weight:600;padding:.7rem 1.1rem;border-radius:10px;text-decoration:none;margin-left:.4rem">\u2B07 macOS</a>'
+          + '</div>'
+          + '<p>' + L("Windows: Datei herunterladen, <b>doppelklicken</b> \u2013 sie tr\u00e4gt HoxPi in Claude ein und startet Claude neu. macOS: <code>bash hoxpi-claude-setup.sh</code> im Terminal. Danach in Claude einfach fragen: \u201eWie geht\u2019s meiner Heizung?\u201c",
+              "Windows: download the file and <b>double-click</b> \u2013 it registers HoxPi in Claude and restarts Claude. macOS: run <code>bash hoxpi-claude-setup.sh</code>. Then just ask Claude: \u201cHow is my heating doing?\u201d") + '</p>'
+          + '<details><summary style="cursor:pointer;color:#5a6675">' + L("Manuell einrichten (Profis)", "Manual setup (pros)") + '</summary>'
+          + '<p>' + L("Claude beenden, dann in <code>claude_desktop_config.json</code> unter <code>mcpServers</code>:", "Quit Claude, then add under <code>mcpServers</code> in <code>claude_desktop_config.json</code>:") + '</p>'
           + '<pre id="mcpjson" style="background:#f3f4f7;border:1px solid #e1e5ec;border-radius:8px;padding:.7rem .9rem;font-size:.85rem;overflow:auto">' + html.escape(pre) + '</pre>'
-          + '<script>var _mj=document.getElementById("mcpjson");_mj.textContent=_mj.textContent.replace("HOSTIP",location.hostname);</script>'
-          + '<div class="note">' + L("Werkzeuge: Status, Diagnose, Register lesen/suchen, Historie (Grafana-Daten), Whitelist ansehen. <b>Schreiben ist standardm\u00e4\u00dfig deaktiviert</b> \u2013 aktivierbar in /home/admin/hoxpi-mcp/config.json (enable_write); jede \u00c4nderung braucht zus\u00e4tzlich eine Best\u00e4tigung und l\u00e4uft durch alle Bridge-Sicherungen.",
-              "Tools: status, diagnosis, read/search registers, history (Grafana data), view whitelist. <b>Writing is disabled by default</b> \u2013 enable via /home/admin/hoxpi-mcp/config.json (enable_write); every change also needs an explicit confirmation and passes all bridge safeguards.") + '</div>'
-          + '<div class="note warn">' + L("Hinweis: Die \u201eCustom Connectors\u201c in den Claude-Einstellungen verlangen eine \u00f6ffentliche https-Adresse \u2013 f\u00fcr das Heimnetz ist die lokale Br\u00fccke <code>mcp-remote</code> (oben) der richtige Weg.",
-              "Note: Claude's \u201cCustom Connectors\u201d require a public https address \u2013 for a home network the local <code>mcp-remote</code> bridge (above) is the way to go.") + '</div>'
+          + '<script>var _mj=document.getElementById("mcpjson");_mj.textContent=_mj.textContent.replace("HOSTIP",location.hostname);</script></details>'
+          + '<div class="note" style="margin-top:.8rem">' + L("Werkzeuge: Status, Diagnose, Register lesen/suchen, Historie (Grafana-Daten), Whitelist ansehen. <b>Schreiben ist standardm\u00e4\u00dfig deaktiviert</b> \u2013 aktivierbar in /home/admin/hoxpi-mcp/config.json (enable_write); jede \u00c4nderung braucht zus\u00e4tzlich eine Best\u00e4tigung und l\u00e4uft durch alle Bridge-Sicherungen. Hinweis: Claudes gehostete \u201eCustom Connectors\u201c verlangen eine \u00f6ffentliche https-Adresse \u2013 im Heimnetz ist dieser lokale Weg der richtige.",
+              "Tools: status, diagnosis, read/search registers, history (Grafana data), view whitelist. <b>Writing is disabled by default</b> (config.json: enable_write); every change also needs explicit confirmation and passes all bridge safeguards. Note: Claude's hosted \u201cCustom Connectors\u201d require a public https address \u2013 on a home network this local route is the way to go.") + '</div>'
           + '</div></div>')
 
     def home(self):
