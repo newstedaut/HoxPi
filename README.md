@@ -17,7 +17,7 @@ HoxPi passively reads the CAN bus of a Hoval® TopTronic® E system (heat pump, 
 - **Home Assistant**: auto-generated Modbus package (`hoxpi.yaml` download) + optional MQTT with auto-discovery
 - **Grafana statistics** (optional, can be toggled on/off in the dashboard): Prometheus exporter → Prometheus (400 days retention) → provisioned Grafana dashboard (temperatures, power, COP, Smart Grid, daily energy)
 - **SG-Ready / PV surplus**: full support for Hoval's Smart Grid offset registers (Use Case 8 of the Hoval Modbus guideline)
-- **AI interface (MCP)**: built-in [Model Context Protocol](https://modelcontextprotocol.io) server (`http://<pi-ip>:8808/mcp`) — AI assistants like Claude can inspect the system live, explain values, analyse Prometheus history and diagnose faults in plain language. Add it in Claude via *Settings → Connectors → Add custom connector*. Writing via MCP is **off by default** (`config.json: enable_write`) and always requires explicit confirmation plus all bridge safeguards
+- **AI interface (MCP)**: built-in [Model Context Protocol](https://modelcontextprotocol.io) server (`http://<pi-ip>:8808/mcp`) — AI assistants like Claude can inspect the system live, explain values, analyse Prometheus history and diagnose faults in plain language. Add it to **Claude Desktop** via `mcp-remote` in `claude_desktop_config.json` (needs Node.js; exact snippet on the dashboard's *Integration* page — Claude's hosted "custom connectors" require a public https URL, so the local bridge is the way to go on a home network). Writing via MCP is **off by default** (`config.json: enable_write`) and always requires explicit confirmation plus all bridge safeguards
 
 ## Hardware
 
@@ -82,7 +82,7 @@ HoxPi liest den CAN-Bus einer Hoval® TopTronic® E-Anlage (Wärmepumpe, Wohnrau
 - **Home Assistant**: automatisch erzeugtes Modbus-Package (`hoxpi.yaml`-Download) + optional MQTT mit Auto-Discovery
 - **Grafana-Statistik** (optional, im Dashboard ein-/ausschaltbar): Exporter → Prometheus (400 Tage) → fertiges Grafana-Dashboard (Temperaturen, Leistung, COP, Smart Grid, Tagesenergie)
 - **SG-Ready / PV-Überschuss**: volle Unterstützung der Hoval-Smart-Grid-Offset-Register (Use Case 8 der Hoval-Modbus-Guideline)
-- **KI-Schnittstelle (MCP)**: eingebauter [Model-Context-Protocol](https://modelcontextprotocol.io)-Server (`http://<pi-ip>:8808/mcp`) — KI-Assistenten wie Claude können die Anlage live inspizieren, Werte erklären, die Historie auswerten und Fehler eingrenzen. In Claude einbinden über *Einstellungen → Connectors → Add custom connector*. Schreiben via MCP ist **standardmäßig aus** (`config.json: enable_write`) und verlangt immer eine explizite Bestätigung plus alle Bridge-Sicherungen
+- **KI-Schnittstelle (MCP)**: eingebauter [Model-Context-Protocol](https://modelcontextprotocol.io)-Server (`http://<pi-ip>:8808/mcp`) — KI-Assistenten wie Claude können die Anlage live inspizieren, Werte erklären, die Historie auswerten und Fehler eingrenzen. Einbindung in **Claude Desktop** per `mcp-remote` in der `claude_desktop_config.json` (braucht Node.js; der fertige Block steht auf der Dashboard-Seite *Integration* — Claudes gehostete „Custom Connectors" verlangen eine öffentliche https-Adresse, im Heimnetz ist die lokale Brücke der richtige Weg). Schreiben via MCP ist **standardmäßig aus** (`config.json: enable_write`) und verlangt immer eine explizite Bestätigung plus alle Bridge-Sicherungen
 
 ## Installation
 

@@ -966,15 +966,19 @@ function apost(url, body, msgid){
             st = "?"
         if st != "active":
             return ""
+        pre = ('"hoxpi": {\n  "command": "npx",\n  "args": ["-y", "mcp-remote", "http://HOSTIP:8808/mcp", "--allow-http"]\n}')
         return ('<div class="domain"><div class="dh" style="background:#7c4dbe;background-image:linear-gradient(90deg,rgba(255,255,255,.15),rgba(255,255,255,0))"><span class="ic">\U0001F916</span><h2>'
           + L("KI-Assistent (MCP)", "AI assistant (MCP)") + '</h2></div><div class="dbody">'
           + '<p>' + L("HoxPi hat eine eingebaute <b>KI-Schnittstelle</b> (Model Context Protocol). Damit kann ein KI-Assistent wie Claude die Anlage live inspizieren, Werte erkl\u00e4ren, die Historie auswerten und Fehler eingrenzen \u2013 in normaler Sprache (\u201eWarum l\u00e4dt das Warmwasser nicht?\u201c).",
               "HoxPi has a built-in <b>AI interface</b> (Model Context Protocol). An AI assistant like Claude can inspect the system live, explain values, analyse history and narrow down faults \u2013 in plain language.") + '</p>'
-          + '<p>' + L("Einrichten (Claude, kostenloser Account reicht): <b>Einstellungen \u2192 Connectors \u2192 Add custom connector</b> und diese Adresse eintragen:", "Set up (Claude): <b>Settings \u2192 Connectors \u2192 Add custom connector</b> and enter this address:") + '</p>'
-          + '<p><code id="mcpurl" style="font-size:1.02rem">http://\u2026:8808/mcp</code></p>'
-          + '<script>document.getElementById("mcpurl").textContent="http://"+location.hostname+":8808/mcp";</script>'
-          + '<div class="note">' + L("Werkzeuge: Status, Diagnose, Register lesen/suchen, Historie (Grafana-Daten), Whitelist ansehen. <b>Schreiben ist standardm\u00e4\u00dfig deaktiviert</b> \u2013 aktivierbar in /home/admin/hoxpi-mcp/config.json (enable_write), jede \u00c4nderung braucht zus\u00e4tzlich eine Best\u00e4tigung und l\u00e4uft durch alle Bridge-Sicherungen.",
+          + '<p>' + L("Einbindung in <b>Claude Desktop</b> (braucht Node.js): Claude komplett beenden (auch Tray-Icon), dann in der Datei <code>claude_desktop_config.json</code> (Windows: <code>%APPDATA%\\Claude</code> \u00b7 macOS: <code>~/Library/Application Support/Claude</code>) unter <code>mcpServers</code> diesen Block eintragen und Claude neu starten:",
+              "Add to <b>Claude Desktop</b> (needs Node.js): quit Claude completely (incl. tray icon), then add this block under <code>mcpServers</code> in <code>claude_desktop_config.json</code> (Windows: <code>%APPDATA%\\Claude</code> \u00b7 macOS: <code>~/Library/Application Support/Claude</code>) and restart Claude:") + '</p>'
+          + '<pre id="mcpjson" style="background:#f3f4f7;border:1px solid #e1e5ec;border-radius:8px;padding:.7rem .9rem;font-size:.85rem;overflow:auto">' + html.escape(pre) + '</pre>'
+          + '<script>var _mj=document.getElementById("mcpjson");_mj.textContent=_mj.textContent.replace("HOSTIP",location.hostname);</script>'
+          + '<div class="note">' + L("Werkzeuge: Status, Diagnose, Register lesen/suchen, Historie (Grafana-Daten), Whitelist ansehen. <b>Schreiben ist standardm\u00e4\u00dfig deaktiviert</b> \u2013 aktivierbar in /home/admin/hoxpi-mcp/config.json (enable_write); jede \u00c4nderung braucht zus\u00e4tzlich eine Best\u00e4tigung und l\u00e4uft durch alle Bridge-Sicherungen.",
               "Tools: status, diagnosis, read/search registers, history (Grafana data), view whitelist. <b>Writing is disabled by default</b> \u2013 enable via /home/admin/hoxpi-mcp/config.json (enable_write); every change also needs an explicit confirmation and passes all bridge safeguards.") + '</div>'
+          + '<div class="note warn">' + L("Hinweis: Die \u201eCustom Connectors\u201c in den Claude-Einstellungen verlangen eine \u00f6ffentliche https-Adresse \u2013 f\u00fcr das Heimnetz ist die lokale Br\u00fccke <code>mcp-remote</code> (oben) der richtige Weg.",
+              "Note: Claude's \u201cCustom Connectors\u201d require a public https address \u2013 for a home network the local <code>mcp-remote</code> bridge (above) is the way to go.") + '</div>'
           + '</div></div>')
 
     def home(self):
