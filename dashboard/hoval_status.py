@@ -308,9 +308,13 @@ if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
   Start-Process 'https://nodejs.org/'
   exit 1
 }
-Get-Process Claude -ErrorAction SilentlyContinue | Stop-Process -Force
-Start-Sleep 2
-$p = Join-Path $env:APPDATA 'Claude\\claude_desktop_config.json'
+Write-Host 'Beende Claude (falls offen) ...'
+Get-Process claude -ErrorAction SilentlyContinue | Stop-Process -Force
+Start-Sleep 5
+$dir = Join-Path $env:APPDATA 'Claude'
+New-Item -ItemType Directory -Force -Path $dir | Out-Null
+$p = Join-Path $dir 'claude_desktop_config.json'
+Write-Host ('Konfiguration: ' + $p)
 if (Test-Path $p) { $cfg = Get-Content $p -Raw | ConvertFrom-Json; Copy-Item $p ($p + '.bak') -Force }
 else { $cfg = [PSCustomObject]@{} }
 if (-not $cfg.PSObject.Properties['mcpServers']) {
@@ -319,7 +323,9 @@ if (-not $cfg.PSObject.Properties['mcpServers']) {
 $hox = [PSCustomObject]@{ command = 'npx'; args = @('-y','mcp-remote','http://HOSTIP:8808/mcp','--allow-http') }
 if ($cfg.mcpServers.PSObject.Properties['hoxpi']) { $cfg.mcpServers.hoxpi = $hox }
 else { $cfg.mcpServers | Add-Member -MemberType NoteProperty -Name hoxpi -Value $hox }
-$cfg | ConvertTo-Json -Depth 10 | Set-Content $p -Encoding UTF8
+$json = $cfg | ConvertTo-Json -Depth 10
+try { Set-Content -Path $p -Value $json -Encoding UTF8 }
+catch { Start-Sleep 3; Set-Content -Path $p -Value $json -Encoding UTF8 }
 Write-Host 'HoxPi eingetragen. Claude wird gestartet...'
 $exe = Join-Path $env:LOCALAPPDATA 'AnthropicClaude\\claude.exe'
 if (Test-Path $exe) { Start-Process $exe } else { Write-Host 'Bitte Claude manuell starten.' }
