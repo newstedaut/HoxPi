@@ -206,6 +206,7 @@ def save_whitelist(s):
     fd, tmp = tempfile.mkstemp(dir=_os.path.dirname(WHITELIST_PATH))
     with _os.fdopen(fd, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=1)
+    _os.chmod(tmp, 0o644)  # welt-lesbar: MQTT-Dienst (User admin) muss die Liste lesen koennen
     _os.replace(tmp, WHITELIST_PATH)
 
 REG_TEXTS_PATH = "/home/admin/hoval-bridge/reg_texts.json"

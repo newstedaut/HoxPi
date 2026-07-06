@@ -289,6 +289,7 @@ def set_whitelist(reg: int, allow: bool, confirm: bool = False) -> dict:
     fd, tmp = tempfile.mkstemp(dir=BRIDGE_DIR)
     with os.fdopen(fd, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=1)
+    os.chmod(tmp, 0o644)  # welt-lesbar: MQTT-Dienst (User admin) muss die Liste lesen koennen
     os.replace(tmp, p)
     return {"ok": True, "reg": reg, "allow": allow, "anzahl": len(wl)}
 
