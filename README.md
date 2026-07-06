@@ -2,7 +2,7 @@
 
 # HoxPi — open gateway for Hoval® TopTronic® E
 
-[![Buy Me a Coffee](https://img.shields.io/badge/☕-Buy%20me%20a%20coffee-ffdd00)](https://buymeacoffee.com/bernhardsu9) [![PayPal](https://img.shields.io/badge/PayPal-Donate-00457C?logo=paypal&logoColor=white)](https://paypal.me/QGlitch)
+[![Buy Me a Coffee](https://img.shields.io/badge/☕-Buy%20me%20a%20coffee-ffdd00)](https://buymeacoffee.com/bernhardsu9) [![PayPal](https://img.shields.io/badge/PayPal-Donate-00457C?logo=paypal&logoColor=white)](https://www.paypal.com/donate/?hosted_button_id=HWBBHDSVD3MCC)
 
 **Raspberry Pi + USB-CAN adapter = a drop-in replacement for the Hoval Modbus gateway.**
 HoxPi passively reads the CAN bus of a Hoval® TopTronic® E system (heat pump, ventilation, buffer module) and exposes every datapoint as **Modbus-TCP (port 502)** — exactly like the original HovalConnect Modbus gateway. The official **Loxone Hoval templates work 1:1**, Home Assistant gets a ready-made config, and an optional **Grafana stack** provides long-term charts. Entirely local, no cloud.
@@ -59,7 +59,7 @@ No code was copied from these projects; HoxPi is an independent implementation.
 
 ## Support
 
-HoxPi is free and develops in my spare time. If it saves you the commercial gateway, consider [buying me a coffee ☕](https://buymeacoffee.com/bernhardsu9) or [donating via PayPal](https://paypal.me/QGlitch) — it funds test hardware and keeps the project going.
+HoxPi is free and develops in my spare time. If it saves you the commercial gateway, consider [buying me a coffee ☕](https://buymeacoffee.com/bernhardsu9) or [donating via PayPal](https://www.paypal.com/donate/?hosted_button_id=HWBBHDSVD3MCC) — it funds test hardware and keeps the project going.
 
 ## License
 
@@ -110,7 +110,7 @@ Es wurde kein Code übernommen — HoxPi ist eine eigenständige Implementierung
 
 ## Unterstützen
 
-HoxPi ist kostenlos und entsteht in meiner Freizeit. Wenn es dir den kommerziellen Gateway erspart: [Spendier mir einen Kaffee ☕](https://buymeacoffee.com/bernhardsu9) oder [per PayPal](https://paypal.me/QGlitch) — das finanziert Test-Hardware und hält das Projekt am Leben.
+HoxPi ist kostenlos und entsteht in meiner Freizeit. Wenn es dir den kommerziellen Gateway erspart: [Spendier mir einen Kaffee ☕](https://buymeacoffee.com/bernhardsu9) oder [per PayPal](https://www.paypal.com/donate/?hosted_button_id=HWBBHDSVD3MCC) — das finanziert Test-Hardware und hält das Projekt am Leben.
 
 ## Lizenz
 
