@@ -1108,7 +1108,13 @@ function apost(url, body, msgid){
 <li><b>{L("Alle Werte","All values")}</b> \u2013 {L("jeder dekodierte Datenpunkt mit Bezeichnung, Beschreibung (Maus drueber!) und Wert.","every decoded data point with label, description (hover!) and value.")}</li>
 <li><b>Register</b> \u2013 {L("alle 514 Register, sortier- und durchsuchbar, mit Schreibfreigabe per Haken.","all 514 registers, sortable and searchable, with write permission checkboxes.")}</li>
 <li><b>Integration</b> \u2013 {L("Loxone & Home Assistant anbinden, Netzwerk/IP einstellen, komplette Anleitung.","connect Loxone & Home Assistant, set network/IP, full guide.")}</li>
-</ul>"""
+</ul>
+<div class="domain"><div class="dh" style="background:#c2185b;background-image:linear-gradient(90deg,rgba(255,255,255,.15),rgba(255,255,255,0))"><span class="ic">\u2764\ufe0f</span><h2>{L("HoxPi unterst\u00fctzen","Support HoxPi")}</h2></div><div class="dbody">
+<p>{L("HoxPi ist kostenlos und Open Source \u2013 entwickelt in der Freizeit. Wenn es dir hilft, freue ich mich \u00fcber einen Kaffee oder eine kleine Spende. Das finanziert Test-Hardware und h\u00e4lt das Projekt am Leben.","HoxPi is free and open source \u2013 built in my spare time. If it helps you, a coffee or small donation is much appreciated. It funds test hardware and keeps the project alive.")}</p>
+<div style="display:flex;gap:.7rem;flex-wrap:wrap;margin-top:.3rem">
+<a href="https://buymeacoffee.com/bernhardsu9" target="_blank" style="display:inline-flex;align-items:center;gap:.4rem;background:#ffdd00;color:#1c2531;font-weight:700;padding:.7rem 1.3rem;border-radius:11px;text-decoration:none;box-shadow:0 2px 8px rgba(0,0,0,.12)">\u2615 Buy me a coffee</a>
+<a href="https://www.paypal.com/donate/?hosted_button_id=HWBBHDSVD3MCC" target="_blank" style="display:inline-flex;align-items:center;gap:.4rem;background:#0070ba;color:#fff;font-weight:700;padding:.7rem 1.3rem;border-radius:11px;text-decoration:none;box-shadow:0 2px 8px rgba(0,0,0,.12)">{L("PayPal-Spende","PayPal donate")}</a>
+</div></div></div>"""
 
     def werte(self):
         regs = [it[0] for _,_,subs in DOMAINS for _,items in subs for it in items if it[0] is not None]
