@@ -149,7 +149,8 @@ def get_status() -> dict:
         "wasserdruck_bar": g(18738),
         "leistung_elektrisch_kw": g(25611), "leistung_thermisch_kw": g(25612),
         "modulation_prozent": g(18726),
-        "cop_aktuell": _r32(31667, 1),
+        "cop_aktuell": _r32(31667, 1),  # nur im laufenden Betrieb ungleich 0
+        "jahresarbeitszahl": g(27467),  # JAZ/SPF - verlässlicher Langzeit-Effizienzwert
         "wp_detailstatus": {"code": (hp or [None])[0] and round((hp[0]) / 10),
                             "text": ST_HP.get(hp and round(hp[0] / 10), "?") if hp else "?"},
         "heizkreis_1": {"code": hc1 and hc1[0], "text": ST_HC.get(hc1 and hc1[0], "?")},
