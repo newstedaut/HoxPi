@@ -1,4 +1,4 @@
-<img src="logo.svg" alt="HoxPi" width="240">
+<img src="HoxPi.png" alt="HoxPi" width="300">
 
 # HoxPi — open gateway for Hoval® TopTronic® E
 
