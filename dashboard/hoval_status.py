@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env python3
+#!/usr/bin/env python3
 # Hoval-Pi Dashboard v4 - Hoval-Branding (hell, rot), Bereiche klar getrennt
 import http.server, socketserver, html, json, datetime, time as _time, threading
 from urllib.parse import urlparse, parse_qs
@@ -10,7 +10,7 @@ HOVAL_RED = "#e2001a"
 # ---------- Sprache (DE/EN) ----------
 _ctx = threading.local()
 def L(de, en=None):
-    """Gibt je nach aktueller Sprache DE oder EN zurÃ¼ck. Ohne EN -> Fallback DE."""
+    """Gibt je nach aktueller Sprache DE oder EN zurück. Ohne EN -> Fallback DE."""
     if getattr(_ctx, "lang", "de") == "en" and en is not None:
         return en
     return de
@@ -19,159 +19,159 @@ def curlang():
 
 # ---------- Status-Texte ----------
 ST_HC  = {0:"Aus",1:"Heizen normal",2:"Heizen Komfort",3:"Heizen Eco",4:"Frostschutz",
-          5:"Zwangsabnahme",6:"Zwangsreduktion",7:"Ferien",8:"Party",9:"KÃ¼hlen normal",
-          12:"StÃ¶rung",13:"Handbetrieb",22:"KÃ¼hlen extern",23:"Heizen extern",26:"SmartGrid"}
-ST_DHW = {0:"Aus",1:"Laden normal",2:"Laden Komfort",5:"StÃ¶rung",6:"Zapfung",
+          5:"Zwangsabnahme",6:"Zwangsreduktion",7:"Ferien",8:"Party",9:"Kühlen normal",
+          12:"Störung",13:"Handbetrieb",22:"Kühlen extern",23:"Heizen extern",26:"SmartGrid"}
+ST_DHW = {0:"Aus",1:"Laden normal",2:"Laden Komfort",5:"Störung",6:"Zapfung",
           8:"Laden reduziert",12:"SmartGrid",13:"SmartGrid Zwang"}
-ST_HP  = {0:"Aus",1:"Heizen",2:"Aktiv-KÃ¼hlen",3:"Sperre",4:"WW-Laden",5:"Frostschutz",
-          6:"WEZ-Temp zu tief",7:"VL zu hoch",8:"Abtauen",9:"Passiv-KÃ¼hlen",
-          11:"Hochdruck-StÃ¶rung",12:"Niederdruck-StÃ¶rung",16:"Wiederanlauf",17:"EVU-Sperre",
-          18:"Vorlaufzeit",19:"Nachlaufzeit",51:"Kondensatorpumpe",55:"Inverter-StÃ¶rung"}
+ST_HP  = {0:"Aus",1:"Heizen",2:"Aktiv-Kühlen",3:"Sperre",4:"WW-Laden",5:"Frostschutz",
+          6:"WEZ-Temp zu tief",7:"VL zu hoch",8:"Abtauen",9:"Passiv-Kühlen",
+          11:"Hochdruck-Störung",12:"Niederdruck-Störung",16:"Wiederanlauf",17:"EVU-Sperre",
+          18:"Vorlaufzeit",19:"Nachlaufzeit",51:"Kondensatorpumpe",55:"Inverter-Störung"}
 # Enum-Texte (Register-spezifisch, aus offizieller Hoval-Tabelle, dt.)
 ENUM = {
- 1478:{0:"Standby",1:"Woche 1",2:"Woche 2",4:"Konstant",5:"Sparbetrieb",7:"Hand Heizen",8:"Hand KÃ¼hlen"},
+ 1478:{0:"Standby",1:"Woche 1",2:"Woche 2",4:"Konstant",5:"Sparbetrieb",7:"Hand Heizen",8:"Hand Kühlen"},
  1496:{0:"Standby",1:"Woche 1",2:"Woche 2",4:"Konstant",6:"Sparbetrieb"},
  23622:{0:"Standby",1:"Woche 1",2:"Woche 2",4:"Konstantbetrieb",5:"Sparbetrieb"},
  23631:{0:"Aus / Standby",1:"Normalbetrieb",2:"VOC-Modus",3:"Feuchte-Modus",4:"Frostschutz",
-        5:"CoolVet (KÃ¼hlen)",6:"Fehler",7:"Sommerfeuchte",8:"Ausschaltstop"},
+        5:"CoolVet (Kühlen)",6:"Fehler",7:"Sommerfeuchte",8:"Ausschaltstop"},
 }
 
 # ---------- Bereiche (2-stufig: Bereich -> Untergruppen -> Werte) ----------
 # Wert: (reg, Name, Einheit/Status, Nachkomma, signed)  |  Hinweis: (None, Text, "note", 0, False)
 DOMAINS = [
- ("WÃ¤rmepumpe", "ðŸ”¥", [
+ ("Wärmepumpe", "🔥", [
    (None, [
-     (1477,"AuÃŸentemperatur","Â°C",1,True),
+     (1477,"Außentemperatur","°C",1,True),
      (1540,"Betriebsstatus","ST_HP",0,False),
      (18726,"Modulation Verdichter","%",0,False),
      (25611,"Elektrische Leistung","kW",2,True),
      (25612,"Heizleistung","kW",0,True),
      (27467,"Effizienz (Arbeitszahl)","",1,False),
      (18738,"Wasserdruck","bar",1,True),
-     (18742,"RÃ¼cklauf WÃ¤rmeerzeuger","Â°C",1,True),
-     (1525,"WEZ-Temperatur","Â°C",1,True),
+     (18742,"Rücklauf Wärmeerzeuger","°C",1,True),
+     (1525,"WEZ-Temperatur","°C",1,True),
    ]),
  ]),
- ("Heizung & KÃ¼hlung", "ðŸŒ¡ï¸", [
+ ("Heizung & Kühlung", "🌡️", [
    (None, [
      (1478,"Betriebsart","ENUM",0,False),
      (1501,"Status Heizkreis","ST_HC",0,False),
-     (1510,"Raumtemperatur Ist","Â°C",1,True),
-     (1493,"Raum-Sollwert","Â°C",1,True),
-     (1513,"Vorlauf-Temperatur","Â°C",1,True),
-     (1535,"RÃ¼cklauf-Temperatur","Â°C",1,True),
-     (1520,"Sollwert Heizkreis","Â°C",1,True),
-     (1524,"Sollwert KÃ¼hlmodus","Â°C",1,True),
+     (1510,"Raumtemperatur Ist","°C",1,True),
+     (1493,"Raum-Sollwert","°C",1,True),
+     (1513,"Vorlauf-Temperatur","°C",1,True),
+     (1535,"Rücklauf-Temperatur","°C",1,True),
+     (1520,"Sollwert Heizkreis","°C",1,True),
+     (1524,"Sollwert Kühlmodus","°C",1,True),
      (19658,"Mischer HK1","%",0,True),
      (19659,"Mischer HK2","%",0,True),
    ]),
  ]),
- ("Warmwasser", "ðŸš¿", [
+ ("Warmwasser", "🚿", [
    (None, [
      (1496,"Betriebsart","ENUM",0,False),
-     (1500,"Warmwasser Ist","Â°C",1,True),
-     (27483,"Warmwasser Ist (FÃ¼hler 2)","Â°C",1,True),
-     (1499,"Warmwasser Sollwert","Â°C",1,True),
-     (1497,"Normal-Temperatur","Â°C",1,True),
-     (1498,"Eco-Temperatur","Â°C",0,False),
+     (1500,"Warmwasser Ist","°C",1,True),
+     (27483,"Warmwasser Ist (Fühler 2)","°C",1,True),
+     (1499,"Warmwasser Sollwert","°C",1,True),
+     (1497,"Normal-Temperatur","°C",1,True),
+     (1498,"Eco-Temperatur","°C",0,False),
      (1504,"Status Warmwasser","ST_DHW",0,False),
    ]),
  ]),
- ("WohnraumlÃ¼ftung", "ðŸ’¨", [
+ ("Wohnraumlüftung", "💨", [
    ("Betrieb & Stufen", [
      (23622,"Betriebswahl","",0,False),
-     (23625,"LÃ¼ftung aktuell (Ist)","%",0,False),
+     (23625,"Lüftung aktuell (Ist)","%",0,False),
      (23623,"Normalstufe (Soll)","%",0,False),
      (23624,"Eco-Stufe (Soll)","%",0,False),
      (23626,"Feuchte-Sollwert","%",0,False),
      (23631,"Status Regelung","",0,False),
    ]),
-   ("ðŸŒ³ AuÃŸenluft â€” Frischluft von drauÃŸen (rein)", [
-     (23632,"AuÃŸenluft-Temperatur","Â°C",1,True),
-     (23629,"VOC AuÃŸenluft","%",0,False),
+   ("🌳 Außenluft — Frischluft von draußen (rein)", [
+     (23632,"Außenluft-Temperatur","°C",1,True),
+     (23629,"VOC Außenluft","%",0,False),
    ]),
-   ("âž¡ï¸ Zuluft â€” in die RÃ¤ume", [
-     (None,"Zuluft-Temperatur und -Feuchte stellt Hoval nicht Ã¼ber Modbus bereit (die HomeVent regelt das intern Ã¼ber die WÃ¤rmerÃ¼ckgewinnung).","note",0,False),
+   ("➡️ Zuluft — in die Räume", [
+     (None,"Zuluft-Temperatur und -Feuchte stellt Hoval nicht über Modbus bereit (die HomeVent regelt das intern über die Wärmerückgewinnung).","note",0,False),
    ]),
-   ("ðŸ  Abluft â€” Raumluft aus den RÃ¤umen (raus)", [
-     (23633,"Abluft-Temperatur","Â°C",1,True),
+   ("🏠 Abluft — Raumluft aus den Räumen (raus)", [
+     (23633,"Abluft-Temperatur","°C",1,True),
      (23627,"Feuchte Abluft","%",0,False),
      (23628,"VOC Abluft","%",0,False),
-     (28940,"COâ‚‚ Abluft","%",0,False),
+     (28940,"CO₂ Abluft","%",0,False),
    ]),
-   ("ðŸŒ¬ï¸ Fortluft â€” AusstoÃŸ nach drauÃŸen", [
-     (23634,"LÃ¼fter (Abluft â†’ Fortluft)","%",0,False),
+   ("🌬️ Fortluft — Ausstoß nach draußen", [
+     (23634,"Lüfter (Abluft → Fortluft)","%",0,False),
    ]),
  ]),
 ]
 
-# Kurzbeschreibungen je Datenpunkt (Register -> Text). FÃ¼r nicht gelistete Register
+# Kurzbeschreibungen je Datenpunkt (Register -> Text). Für nicht gelistete Register
 # wird automatisch ein Text aus den Metadaten erzeugt -> jeder Wert hat einen Tooltip.
 DESC = {
- 1477:"Aktuelle AuÃŸentemperatur (FÃ¼hler der WÃ¤rmepumpe). Basis fÃ¼r die witterungsgefÃ¼hrte Heizkurve.",
- 1540:"Betriebszustand der WÃ¤rmepumpe (z. B. Heizen, KÃ¼hlen, Warmwasser, Abtauen, Standby).",
+ 1477:"Aktuelle Außentemperatur (Fühler der Wärmepumpe). Basis für die witterungsgeführte Heizkurve.",
+ 1540:"Betriebszustand der Wärmepumpe (z. B. Heizen, Kühlen, Warmwasser, Abtauen, Standby).",
  18726:"Aktuelle Verdichterleistung in Prozent. 0 % = aus, 100 % = Volllast.",
- 25611:"Momentan aufgenommene elektrische Leistung (Stromverbrauch der WÃ¤rmepumpe).",
- 25612:"Momentan abgegebene WÃ¤rmeleistung an Heizung bzw. Warmwasser.",
- 27467:"Arbeitszahl (COP): abgegebene WÃ¤rme geteilt durch eingesetzten Strom. HÃ¶her = effizienter.",
- 18738:"Wasserdruck im Heizkreis. Normal ca. 1â€“2 bar. Zu niedrig â†’ Wasser nachfÃ¼llen.",
- 18742:"Temperatur des zur WÃ¤rmepumpe zurÃ¼ckflieÃŸenden Heizwassers.",
- 1525:"Temperatur am WÃ¤rmeerzeuger selbst (interner Vorlauf der WÃ¤rmepumpe).",
- 1478:"GewÃ¤hlte Betriebsart des Heizkreises (Automatik, Komfort, Eco, Aus â€¦).",
- 1501:"Aktueller Zustand des Heizkreises (Heizen, KÃ¼hlen, Aus â€¦).",
+ 25611:"Momentan aufgenommene elektrische Leistung (Stromverbrauch der Wärmepumpe).",
+ 25612:"Momentan abgegebene Wärmeleistung an Heizung bzw. Warmwasser.",
+ 27467:"Arbeitszahl (COP): abgegebene Wärme geteilt durch eingesetzten Strom. Höher = effizienter.",
+ 18738:"Wasserdruck im Heizkreis. Normal ca. 1–2 bar. Zu niedrig → Wasser nachfüllen.",
+ 18742:"Temperatur des zur Wärmepumpe zurückfließenden Heizwassers.",
+ 1525:"Temperatur am Wärmeerzeuger selbst (interner Vorlauf der Wärmepumpe).",
+ 1478:"Gewählte Betriebsart des Heizkreises (Automatik, Komfort, Eco, Aus …).",
+ 1501:"Aktueller Zustand des Heizkreises (Heizen, Kühlen, Aus …).",
  1510:"Aktuell gemessene Raumtemperatur des Heizkreises.",
- 1493:"Aktuell gÃ¼ltiger Soll-Wert der Raumtemperatur (ergibt sich aus der Betriebsart).",
- 1513:"Vorlauf: Temperatur des warmen Wassers, das in die FuÃŸbodenheizung flieÃŸt.",
- 1535:"RÃ¼cklauf: Temperatur des aus der FuÃŸbodenheizung zurÃ¼ckkommenden Wassers.",
+ 1493:"Aktuell gültiger Soll-Wert der Raumtemperatur (ergibt sich aus der Betriebsart).",
+ 1513:"Vorlauf: Temperatur des warmen Wassers, das in die Fußbodenheizung fließt.",
+ 1535:"Rücklauf: Temperatur des aus der Fußbodenheizung zurückkommenden Wassers.",
  1520:"Soll-Vorlauftemperatur des Heizkreises (aus der Heizkurve berechnet).",
- 1524:"Soll-Vorlauftemperatur im KÃ¼hlbetrieb (trÃ¤ge FuÃŸbodenkÃ¼hlung).",
- 19658:"Mischventil-Stellung Heizkreis 1 (Hoval: Mischer HC1) â€” mischt Vor- und RÃ¼cklauf auf die Soll-Vorlauftemperatur. Welcher Stock/Raum das ist, ordnest du selbst zu (Datei labels.json).",
- 19659:"Mischventil-Stellung Heizkreis 2 (Hoval: Mischer HC2) â€” mischt Vor- und RÃ¼cklauf auf die Soll-Vorlauftemperatur.",
- 1496:"GewÃ¤hlte Betriebsart der Warmwasserbereitung (Automatik, Normal, Eco, Aus).",
- 1500:"Aktuelle Temperatur im Warmwasserspeicher (oberer FÃ¼hler).",
- 27483:"Warmwassertemperatur am zweiten/unteren SpeicherfÃ¼hler.",
- 1499:"Aktuell gÃ¼ltige Soll-Warmwassertemperatur.",
- 1497:"Solltemperatur Warmwasser im Normalbetrieb. Ãœber Loxone einstellbar (schreibbar).",
+ 1524:"Soll-Vorlauftemperatur im Kühlbetrieb (träge Fußbodenkühlung).",
+ 19658:"Mischventil-Stellung Heizkreis 1 (Hoval: Mischer HC1) — mischt Vor- und Rücklauf auf die Soll-Vorlauftemperatur. Welcher Stock/Raum das ist, ordnest du selbst zu (Datei labels.json).",
+ 19659:"Mischventil-Stellung Heizkreis 2 (Hoval: Mischer HC2) — mischt Vor- und Rücklauf auf die Soll-Vorlauftemperatur.",
+ 1496:"Gewählte Betriebsart der Warmwasserbereitung (Automatik, Normal, Eco, Aus).",
+ 1500:"Aktuelle Temperatur im Warmwasserspeicher (oberer Fühler).",
+ 27483:"Warmwassertemperatur am zweiten/unteren Speicherfühler.",
+ 1499:"Aktuell gültige Soll-Warmwassertemperatur.",
+ 1497:"Solltemperatur Warmwasser im Normalbetrieb. Über Loxone einstellbar (schreibbar).",
  1498:"Solltemperatur Warmwasser im Eco-/Sparbetrieb.",
- 1504:"Aktueller Zustand der Warmwasserbereitung (Laden, bereit, Aus â€¦).",
- 23622:"GewÃ¤hlte Betriebsart der WohnraumlÃ¼ftung.",
- 23625:"Aktuelle LÃ¼fterleistung in Prozent.",
- 23623:"Soll-LÃ¼fterstufe im Normalbetrieb.",
- 23624:"Soll-LÃ¼fterstufe im Eco-/Sparbetrieb.",
- 23626:"Soll-Luftfeuchte â€“ darÃ¼ber erhÃ¶ht die LÃ¼ftung ggf. die Stufe.",
- 23631:"Aktueller Regelzustand der LÃ¼ftung.",
- 23632:"Temperatur der angesaugten Frischluft von drauÃŸen.",
- 23629:"LuftqualitÃ¤t (flÃ¼chtige organische Stoffe, VOC) der AuÃŸenluft.",
- 23633:"Temperatur der aus den RÃ¤umen abgesaugten Luft.",
- 23627:"Luftfeuchte der Raumabluft â€“ Basis fÃ¼r die Feuchteregelung.",
- 23628:"LuftqualitÃ¤t der Raumabluft (Geruch/Schadstoffe, VOC).",
- 28940:"COâ‚‚-Gehalt der Raumluft â€“ Indikator fÃ¼r verbrauchte Luft.",
- 23634:"Leistung des Fortluftventilators (AusstoÃŸ der verbrauchten Luft nach drauÃŸen).",
+ 1504:"Aktueller Zustand der Warmwasserbereitung (Laden, bereit, Aus …).",
+ 23622:"Gewählte Betriebsart der Wohnraumlüftung.",
+ 23625:"Aktuelle Lüfterleistung in Prozent.",
+ 23623:"Soll-Lüfterstufe im Normalbetrieb.",
+ 23624:"Soll-Lüfterstufe im Eco-/Sparbetrieb.",
+ 23626:"Soll-Luftfeuchte – darüber erhöht die Lüftung ggf. die Stufe.",
+ 23631:"Aktueller Regelzustand der Lüftung.",
+ 23632:"Temperatur der angesaugten Frischluft von draußen.",
+ 23629:"Luftqualität (flüchtige organische Stoffe, VOC) der Außenluft.",
+ 23633:"Temperatur der aus den Räumen abgesaugten Luft.",
+ 23627:"Luftfeuchte der Raumabluft – Basis für die Feuchteregelung.",
+ 23628:"Luftqualität der Raumabluft (Geruch/Schadstoffe, VOC).",
+ 28940:"CO₂-Gehalt der Raumluft – Indikator für verbrauchte Luft.",
+ 23634:"Leistung des Fortluftventilators (Ausstoß der verbrauchten Luft nach draußen).",
 }
 
-# Ãœbersetzung der Bezeichnungen (Bereiche, UnterÃ¼berschriften, Wertnamen) fÃ¼r die Werte-Seite
+# Übersetzung der Bezeichnungen (Bereiche, Unterüberschriften, Wertnamen) für die Werte-Seite
 TR_LABEL = {
- "WÃ¤rmepumpe":"Heat pump","Heizung & KÃ¼hlung":"Heating & Cooling","Warmwasser":"Hot water","WohnraumlÃ¼ftung":"Ventilation",
+ "Wärmepumpe":"Heat pump","Heizung & Kühlung":"Heating & Cooling","Warmwasser":"Hot water","Wohnraumlüftung":"Ventilation",
  "Betrieb & Stufen":"Operation & levels",
- "ðŸŒ³ AuÃŸenluft â€” Frischluft von drauÃŸen (rein)":"ðŸŒ³ Outdoor air â€” fresh air from outside (in)",
- "âž¡ï¸ Zuluft â€” in die RÃ¤ume":"âž¡ï¸ Supply air â€” into the rooms",
- "ðŸ  Abluft â€” Raumluft aus den RÃ¤umen (raus)":"ðŸ  Extract air â€” room air from the rooms (out)",
- "ðŸŒ¬ï¸ Fortluft â€” AusstoÃŸ nach drauÃŸen":"ðŸŒ¬ï¸ Exhaust air â€” expelled outside",
- "AuÃŸentemperatur":"Outdoor temperature","Betriebsstatus":"Operating status","Modulation Verdichter":"Compressor modulation",
+ "🌳 Außenluft — Frischluft von draußen (rein)":"🌳 Outdoor air — fresh air from outside (in)",
+ "➡️ Zuluft — in die Räume":"➡️ Supply air — into the rooms",
+ "🏠 Abluft — Raumluft aus den Räumen (raus)":"🏠 Extract air — room air from the rooms (out)",
+ "🌬️ Fortluft — Ausstoß nach draußen":"🌬️ Exhaust air — expelled outside",
+ "Außentemperatur":"Outdoor temperature","Betriebsstatus":"Operating status","Modulation Verdichter":"Compressor modulation",
  "Elektrische Leistung":"Electrical power","Heizleistung":"Heating power","Effizienz (Arbeitszahl)":"Efficiency (COP)",
- "Wasserdruck":"Water pressure","RÃ¼cklauf WÃ¤rmeerzeuger":"Return (heat generator)","WEZ-Temperatur":"Heat generator temp.",
+ "Wasserdruck":"Water pressure","Rücklauf Wärmeerzeuger":"Return (heat generator)","WEZ-Temperatur":"Heat generator temp.",
  "Betriebsart":"Operating mode","Status Heizkreis":"Heating circuit status","Raumtemperatur Ist":"Room temperature (actual)",
- "Raum-Sollwert":"Room setpoint","Vorlauf-Temperatur":"Flow temperature","RÃ¼cklauf-Temperatur":"Return temperature",
- "Sollwert Heizkreis":"Heating circuit setpoint","Sollwert KÃ¼hlmodus":"Cooling setpoint",
+ "Raum-Sollwert":"Room setpoint","Vorlauf-Temperatur":"Flow temperature","Rücklauf-Temperatur":"Return temperature",
+ "Sollwert Heizkreis":"Heating circuit setpoint","Sollwert Kühlmodus":"Cooling setpoint",
  "Mischer HK1":"Mixer HC1","Mischer HK2":"Mixer HC2",
- "Warmwasser Ist":"Hot water (actual)","Warmwasser Ist (FÃ¼hler 2)":"Hot water (sensor 2)","Warmwasser Sollwert":"Hot water setpoint",
+ "Warmwasser Ist":"Hot water (actual)","Warmwasser Ist (Fühler 2)":"Hot water (sensor 2)","Warmwasser Sollwert":"Hot water setpoint",
  "Normal-Temperatur":"Normal temperature","Eco-Temperatur":"Eco temperature","Status Warmwasser":"Hot water status",
- "Betriebswahl":"Operation selection","LÃ¼ftung aktuell (Ist)":"Ventilation actual","Normalstufe (Soll)":"Normal level (set)",
+ "Betriebswahl":"Operation selection","Lüftung aktuell (Ist)":"Ventilation actual","Normalstufe (Soll)":"Normal level (set)",
  "Eco-Stufe (Soll)":"Eco level (set)","Feuchte-Sollwert":"Humidity setpoint","Status Regelung":"Control status",
- "AuÃŸenluft-Temperatur":"Outdoor air temperature","VOC AuÃŸenluft":"VOC outdoor air","Abluft-Temperatur":"Extract air temperature",
- "Feuchte Abluft":"Extract air humidity","VOC Abluft":"VOC extract air","COâ‚‚ Abluft":"COâ‚‚ extract air",
- "LÃ¼fter (Abluft â†’ Fortluft)":"Fan (extract â†’ exhaust)",
- "Zuluft-Temperatur und -Feuchte stellt Hoval nicht Ã¼ber Modbus bereit (die HomeVent regelt das intern Ã¼ber die WÃ¤rmerÃ¼ckgewinnung).":
+ "Außenluft-Temperatur":"Outdoor air temperature","VOC Außenluft":"VOC outdoor air","Abluft-Temperatur":"Extract air temperature",
+ "Feuchte Abluft":"Extract air humidity","VOC Abluft":"VOC extract air","CO₂ Abluft":"CO₂ extract air",
+ "Lüfter (Abluft → Fortluft)":"Fan (extract → exhaust)",
+ "Zuluft-Temperatur und -Feuchte stellt Hoval nicht über Modbus bereit (die HomeVent regelt das intern über die Wärmerückgewinnung).":
    "Hoval does not expose supply-air temperature and humidity over Modbus (the HomeVent regulates this internally via heat recovery).",
 }
 def tl(s):
@@ -185,8 +185,8 @@ def desc(reg, name="", unit="", writable=None):
     parts.append(f"Hoval-Datenpunkt, Modbus-Register {reg}")
     if unit: parts.append(f"Einheit: {unit}")
     if writable in (True, 1, "Yes", "yes", "Y", "y", "true", "True", "WAHR"):
-        parts.append("Ã¼ber Loxone schreibbar")
-    return " Â· ".join(parts)
+        parts.append("über Loxone schreibbar")
+    return " · ".join(parts)
 
 def regmap():
     try: return {r["reg"]: r for r in json.load(open(REG_PATH, encoding="utf-8"))}
@@ -241,10 +241,10 @@ def net_info():
     except Exception:
         return None
 
-# ---------- 2FA (TOTP) fÃ¼r Schreibaktionen ----------
+# ---------- 2FA (TOTP) für Schreibaktionen ----------
 AUTH_PATH = "/home/admin/hoval-bridge/auth.json"
 SESSIONS = {}          # token -> ablauf (unix)
-_auth_pending = {}     # {"secret": ...} wÃ¤hrend des Setups
+_auth_pending = {}     # {"secret": ...} während des Setups
 _auth_tries = []       # timestamps fehlgeschlagener Versuche (Rate-Limit)
 
 def auth_secret():
@@ -421,34 +421,34 @@ def read_all(regs):
     return vals
 
 def fmt(raw, unit, dec, signed):
-    if raw is None: return "â€”", "muted"
+    if raw is None: return "—", "muted"
     if unit == "ST_HC":  return ST_HC.get(raw, f"Code {raw}"), ("bad" if raw == 12 else "ok")
     if unit == "ST_DHW": return ST_DHW.get(raw, f"Code {raw}"), ("bad" if raw == 5 else "ok")
     if unit == "ST_HP":  return ST_HP.get(raw, f"Code {raw}"), "ok"
-    if raw in (0xFFFF, 0x8000): return "â€”", "muted"
-    if (not signed) and dec == 0 and raw == 0xFF: return "â€”", "muted"
+    if raw in (0xFFFF, 0x8000): return "—", "muted"
+    if (not signed) and dec == 0 and raw == 0xFF: return "—", "muted"
     v = raw - 65536 if (signed and raw > 32767) else raw
     if dec: v = v / (10 ** dec)
-    if v in (3276.7, -3276.8, 6553.5): return "â€”", "muted"
+    if v in (3276.7, -3276.8, 6553.5): return "—", "muted"
     s = f"{v:.{dec}f}".replace(".", ",") if dec else f"{v}"
     return f"{s} {unit}".strip(), "val"
 
 def decode_reg(r, raw):
-    if raw is None: return "â€”", True
+    if raw is None: return "—", True
     t = (r.get("type") or "").upper(); dec = r.get("decimal") or 0
-    if t in ("U32", "S32"): return "â€”", True
-    if raw in (0xFFFF, 0x8000): return "â€”", True
+    if t in ("U32", "S32"): return "—", True
+    if raw in (0xFFFF, 0x8000): return "—", True
     if t in ("U8", "S8"): raw &= 0xFF
-    if t == "U8" and dec == 0 and raw == 0xFF: return "â€”", True
+    if t == "U8" and dec == 0 and raw == 0xFF: return "—", True
     v = raw
     if t == "S16" and raw > 32767: v = raw - 65536
     elif t == "S8" and raw > 127: v = raw - 256
     if dec: v = v / (10 ** dec)
-    if v in (3276.7, -3276.8, 6553.5): return "â€”", True
+    if v in (3276.7, -3276.8, 6553.5): return "—", True
     s = (f"{v:.{dec}f}".replace(".", ",") if dec else f"{v}")
     return f"{s} {r.get('unit') or ''}".strip(), False
 
-HA_UNITS = {"Â°C","%","bar","kW","kWh","Wh","W","V","A","Hz","h","min","l/h","mÂ³/h","rpm","ppm","K","%RH"}
+HA_UNITS = {"°C","%","bar","kW","kWh","Wh","W","V","A","Hz","h","min","l/h","m³/h","rpm","ppm","K","%RH"}
 
 def ha_yaml(host="192.168.1.168"):
     m = regmap()
@@ -592,10 +592,10 @@ def page(title, active, body, refresh=False, path="/"):
           f'<a class="{"on" if lg=="en" else ""}" href="{path}?lang=en" title="English">{FLAG_EN}</a></div>')
     return f"""<!doctype html><html lang={lg}><head><meta charset=utf-8>
 <meta name=viewport content="width=device-width,initial-scale=1">{rf}
-<title>HoxPi Â· {title}</title><style>{CSS}</style></head><body>
-<header><span class="logo"><svg height="44" viewBox="0 0 150 54" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="HoxPi"><polyline points="44,22 70,7 96,22" fill="none" stroke="#41bdf5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><text text-anchor="end" x="95" y="44" font-size="21" font-weight="700" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif"><tspan fill="#e2001a">H</tspan><tspan fill="#1c2531">o</tspan><tspan fill="#69b41e">x</tspan><tspan fill="#c2185b">P</tspan></text><rect x="97.2" y="33" width="2.5" height="10.5" rx="1.25" fill="#c2185b"/><path d="M98.7,25 C98.2,22 99.4,19.5 101.6,18.6 C100.2,20.6 99.8,22.8 98.7,25 z" fill="#4ea51f"/><line x1="98.8" y1="24.6" x2="101.4" y2="18.9" stroke="#2f6e12" stroke-width="0.4"/><circle cx="98.45" cy="25.7" r="1.2" fill="#e8463f"/><circle cx="100.45" cy="26.85" r="1.2" fill="#d8201c"/><circle cx="96.45" cy="26.85" r="1.2" fill="#d8201c"/><circle cx="98.45" cy="28.0" r="1.2" fill="#d8201c"/><circle cx="100.45" cy="29.15" r="1.2" fill="#b81818"/><circle cx="96.45" cy="29.15" r="1.2" fill="#b81818"/><circle cx="98.45" cy="30.3" r="1.1" fill="#a01414"/><circle cx="98.0" cy="25.4" r="0.4" fill="#ffd9d4"/><circle cx="98.0" cy="27.6" r="0.4" fill="#ffd9d4"/><rect x="44" y="48" width="18" height="3.5" rx="1.75" fill="#e2001a"/><rect x="64" y="48" width="18" height="3.5" rx="1.75" fill="#c2185b"/><rect x="84" y="48" width="18" height="3.5" rx="1.75" fill="#69b41e"/></svg></span><span class="brand">{L("fÃ¼r","for")} HovalÂ® TopTronicÂ® E</span><nav>{nav}</nav>{sw}</header>
+<title>HoxPi · {title}</title><style>{CSS}</style></head><body>
+<header><span class="logo"><svg height="44" viewBox="0 0 150 54" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="HoxPi"><polyline points="44,22 70,7 96,22" fill="none" stroke="#41bdf5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><text text-anchor="end" x="95" y="44" font-size="21" font-weight="700" font-family="system-ui,-apple-system,Segoe UI,Roboto,sans-serif"><tspan fill="#e2001a">H</tspan><tspan fill="#1c2531">o</tspan><tspan fill="#69b41e">x</tspan><tspan fill="#c2185b">P</tspan></text><rect x="97.2" y="33" width="2.5" height="10.5" rx="1.25" fill="#c2185b"/><path d="M98.7,25 C98.2,22 99.4,19.5 101.6,18.6 C100.2,20.6 99.8,22.8 98.7,25 z" fill="#4ea51f"/><line x1="98.8" y1="24.6" x2="101.4" y2="18.9" stroke="#2f6e12" stroke-width="0.4"/><circle cx="98.45" cy="25.7" r="1.2" fill="#e8463f"/><circle cx="100.45" cy="26.85" r="1.2" fill="#d8201c"/><circle cx="96.45" cy="26.85" r="1.2" fill="#d8201c"/><circle cx="98.45" cy="28.0" r="1.2" fill="#d8201c"/><circle cx="100.45" cy="29.15" r="1.2" fill="#b81818"/><circle cx="96.45" cy="29.15" r="1.2" fill="#b81818"/><circle cx="98.45" cy="30.3" r="1.1" fill="#a01414"/><circle cx="98.0" cy="25.4" r="0.4" fill="#ffd9d4"/><circle cx="98.0" cy="27.6" r="0.4" fill="#ffd9d4"/><rect x="44" y="48" width="18" height="3.5" rx="1.75" fill="#e2001a"/><rect x="64" y="48" width="18" height="3.5" rx="1.75" fill="#c2185b"/><rect x="84" y="48" width="18" height="3.5" rx="1.75" fill="#69b41e"/></svg></span><span class="brand">{L("für","for")} Hoval® TopTronic® E</span><nav>{nav}</nav>{sw}</header>
 <main>{body}</main>{PIPHOST_JS}
-<footer>{L("HoxPi Â· offenes Gateway fÃ¼r HovalÂ® TopTronicÂ® E Â· unabhÃ¤ngiges Open-Source-Projekt, nicht mit der Hoval AG verbunden","HoxPi Â· open gateway for HovalÂ® TopTronicÂ® E Â· independent open-source project, not affiliated with Hoval AG")} Â· <a href="https://buymeacoffee.com/bernhardsu9" target="_blank" style="color:#8a94a5">â˜• {L("Projekt unterstÃ¼tzen","Support the project")}</a> Â· <a href="https://www.paypal.com/donate/?hosted_button_id=HWBBHDSVD3MCC" target="_blank" style="color:#8a94a5">PayPal</a> Â· {datetime.datetime.now():%d.%m.%Y %H:%M}</footer>
+<footer>{L("HoxPi · offenes Gateway für Hoval® TopTronic® E · unabhängiges Open-Source-Projekt, nicht mit der Hoval AG verbunden","HoxPi · open gateway for Hoval® TopTronic® E · independent open-source project, not affiliated with Hoval AG")} · <a href="https://buymeacoffee.com/bernhardsu9" target="_blank" style="color:#8a94a5">☕ {L("Projekt unterstützen","Support the project")}</a> · <a href="https://www.paypal.com/donate/?hosted_button_id=HWBBHDSVD3MCC" target="_blank" style="color:#8a94a5">PayPal</a> · {datetime.datetime.now():%d.%m.%Y %H:%M}</footer>
 </body></html>"""
 
 def schema():
@@ -607,15 +607,15 @@ def schema():
   .su{{fill:#6c7787;font:11px Segoe UI,sans-serif}} .lb{{fill:{HOVAL_RED};font:600 11px Segoe UI,sans-serif}}
   line{{stroke:{HOVAL_RED};stroke-width:2;marker-end:url(#ar)}}</style>
  <rect class="bx" x="12" y="55" width="150" height="100" rx="11" stroke="#e2001a" stroke-width="2"/>
- <text class="ti" x="30" y="92">{L("WÃ¤rmepumpe","Heat pump")}</text><text class="su" x="30" y="112">{L("+ Wohnraum-","+ ventil-")}</text>
- <text class="su" x="30" y="128">{L("lÃ¼ftung","ation")}</text><text class="su" x="30" y="146">(TopTronic E)</text>
+ <text class="ti" x="30" y="92">{L("Wärmepumpe","Heat pump")}</text><text class="su" x="30" y="112">{L("+ Wohnraum-","+ ventil-")}</text>
+ <text class="su" x="30" y="128">{L("lüftung","ation")}</text><text class="su" x="30" y="146">(TopTronic E)</text>
  <line x1="162" y1="105" x2="240" y2="105"/><text class="lb" x="170" y="96">CAN 50k</text>
  <rect class="bx" x="243" y="62" width="132" height="86" rx="11"/>
  <text class="ti" x="258" y="98">USB-CAN</text><text class="su" x="258" y="118">SH-C30G</text>
  <line x1="375" y1="105" x2="425" y2="105"/>
  <rect class="bx" x="428" y="52" width="178" height="106" rx="11" stroke="#c2185b" stroke-width="2"/>
- <text class="ti" x="445" y="86">Raspberry Pi</text><text class="su" x="445" y="106">{L("HoxPi-BrÃ¼cke","HoxPi bridge")}</text>
- <text class="su" x="445" y="124">{L("CAN â†’ Register","CAN â†’ registers")}</text>
+ <text class="ti" x="445" y="86">Raspberry Pi</text><text class="su" x="445" y="106">{L("HoxPi-Brücke","HoxPi bridge")}</text>
+ <text class="su" x="445" y="124">{L("CAN → Register","CAN → registers")}</text>
  <line x1="606" y1="105" x2="660" y2="105" style="marker-end:none"/><text class="lb" x="600" y="98">Modbus :502</text>
  <line x1="660" y1="105" x2="690" y2="74"/>
  <line x1="660" y1="105" x2="690" y2="160"/>
@@ -1084,23 +1084,23 @@ function apost(url, body, msgid){
 
     def home(self):
         return f"""<h1>{L("Deine Hoval-Anlage im Netzwerk","Your Hoval system on the network")}</h1>
-<p>{L("Dieser Raspberry Pi liest <b>WÃ¤rmepumpe</b> und <b>WohnraumlÃ¼ftung</b> Ã¼ber den Hoval-CAN-Bus aus und stellt alle Werte als <b>Modbus-TCP</b> bereit â€” wie der originale Hoval-Gateway. So kÃ¶nnen <b>Loxone</b> und <b>Home Assistant</b> die Anlage lesen (und gezielt steuern), ganz ohne Cloud.","This Raspberry Pi reads the <b>heat pump</b> and <b>ventilation</b> over the Hoval CAN bus and exposes every value as <b>Modbus-TCP</b> â€” just like the original Hoval gateway. So <b>Loxone</b> and <b>Home Assistant</b> can read (and selectively control) the system, entirely without cloud.")}</p>
+<p>{L("Dieser Raspberry Pi liest <b>Wärmepumpe</b> und <b>Wohnraumlüftung</b> über den Hoval-CAN-Bus aus und stellt alle Werte als <b>Modbus-TCP</b> bereit — wie der originale Hoval-Gateway. So können <b>Loxone</b> und <b>Home Assistant</b> die Anlage lesen (und gezielt steuern), ganz ohne Cloud.","This Raspberry Pi reads the <b>heat pump</b> and <b>ventilation</b> over the Hoval CAN bus and exposes every value as <b>Modbus-TCP</b> — just like the original Hoval gateway. So <b>Loxone</b> and <b>Home Assistant</b> can read (and selectively control) the system, entirely without cloud.")}</p>
 {schema()}
 <div class="grid3" style="margin-top:1rem">
-  <div class="card"><div class="n">{L("Datenfluss","Data flow")}</div><div class="v" style="font-size:1rem">CAN â†’ Pi â†’ Modbus</div></div>
+  <div class="card"><div class="n">{L("Datenfluss","Data flow")}</div><div class="v" style="font-size:1rem">CAN → Pi → Modbus</div></div>
   <div class="card"><div class="n">{L("Adresse (Modbus-TCP)","Address (Modbus-TCP)")}</div><div class="v" style="font-size:1.05rem">192.168.1.168:502</div></div>
-  <div class="card"><div class="n">{L("Status","Status")}</div><div class="v ok" style="font-size:1.05rem">{L("aktiv Â· liest live","active Â· reading live")}</div></div>
+  <div class="card"><div class="n">{L("Status","Status")}</div><div class="v ok" style="font-size:1.05rem">{L("aktiv · liest live","active · reading live")}</div></div>
 </div>
-<div class="domain"><div class="dh" style="background:#c2185b;background-image:linear-gradient(90deg,rgba(255,255,255,.15),rgba(255,255,255,0))"><span class="ic">ðŸ›’</span><h2>{L("Hardware-Vorschlag","Hardware suggestion")}</h2></div><div class="dbody">
-<p>{L("Das braucht man, um HoxPi nachzubauen â€” gÃ¼nstige Standardteile:","What you need to build HoxPi â€” inexpensive standard parts:")}</p>
+<div class="domain"><div class="dh" style="background:#c2185b;background-image:linear-gradient(90deg,rgba(255,255,255,.15),rgba(255,255,255,0))"><span class="ic">🛒</span><h2>{L("Hardware-Vorschlag","Hardware suggestion")}</h2></div><div class="dbody">
+<p>{L("Das braucht man, um HoxPi nachzubauen — günstige Standardteile:","What you need to build HoxPi — inexpensive standard parts:")}</p>
 <table><tr><th>{L("Teil","Part")}</th><th>{L("Hinweis","Note")}</th></tr>
 <tr><td>{L("Einplatinen-Rechner","Single-board computer")}</td><td>{L("Raspberry Pi 4 (2 GB reichen)","Raspberry Pi 4 (2 GB is enough)")}</td></tr>
 <tr><td>{L("USB-CAN-Adapter","USB-CAN adapter")}</td><td>DSD-TECH SH-C30G</td></tr>
 <tr><td>{L("PoE-Splitter (optional)","PoE splitter (optional)")}</td><td>{L("5 V, <b>mindestens 3 A</b> (der Pi 4 braucht 5 V/3 A)","5 V, <b>at least 3 A</b> (the Pi 4 needs 5 V/3 A)")}</td></tr>
-<tr><td>{L("GehÃ¤use","Case")}</td><td>{L("passend fÃ¼r Raspberry Pi 4","for Raspberry Pi 4")}</td></tr>
+<tr><td>{L("Gehäuse","Case")}</td><td>{L("passend für Raspberry Pi 4","for Raspberry Pi 4")}</td></tr>
 <tr><td>{L("microSD-Karte","microSD card")}</td><td>{L("ab 16 GB","16 GB or more")}</td></tr>
 </table>
-<div class="note" style="margin-top:.8rem">{L("PoE ist optional â€” der Pi kann auch per USB-Netzteil (5 V/3 A) laufen. Anschluss am Hoval-CAN erfolgt am <b>WEZ-Modul</b> (Klemme + âš H L). Details auf der Seite <b>Integration</b>.","PoE is optional â€” the Pi can also run from a USB power supply (5 V/3 A). The Hoval CAN is tapped at the <b>WEZ module</b> (terminal + âš H L). Details on the <b>Integration</b> page.")}</div>
+<div class="note" style="margin-top:.8rem">{L("PoE ist optional — der Pi kann auch per USB-Netzteil (5 V/3 A) laufen. Anschluss am Hoval-CAN erfolgt am <b>WEZ-Modul</b> (Klemme + ⏚ H L). Details auf der Seite <b>Integration</b>.","PoE is optional — the Pi can also run from a USB power supply (5 V/3 A). The Hoval CAN is tapped at the <b>WEZ module</b> (terminal + ⏚ H L). Details on the <b>Integration</b> page.")}</div>
 </div></div>
 <h2 class="sec">{L("Die Seiten","The pages")}</h2>
 <ul>
@@ -1120,9 +1120,9 @@ function apost(url, body, msgid){
         regs = [it[0] for _,_,subs in DOMAINS for _,items in subs for it in items if it[0] is not None]
         vals, ok = read_modbus(regs)
         if not ok:
-            return f'<h1>{L("Werte","Values")}</h1><div class="note warn">âš ï¸ {L("BrÃ¼cke (Modbus :502) nicht erreichbar.","Bridge (Modbus :502) not reachable.")}</div>'
+            return f'<h1>{L("Werte","Values")}</h1><div class="note warn">⚠️ {L("Brücke (Modbus :502) nicht erreichbar.","Bridge (Modbus :502) not reachable.")}</div>'
         out = [f'<h1>{L("Live-Werte","Live values")}</h1>']
-        dcol = {"WÃ¤rmepumpe":"#e2001a","Heizung & KÃ¼hlung":"#e2001a","Warmwasser":"#c2185b","WohnraumlÃ¼ftung":"#69b41e"}
+        dcol = {"Wärmepumpe":"#e2001a","Heizung & Kühlung":"#e2001a","Warmwasser":"#c2185b","Wohnraumlüftung":"#69b41e"}
         for title, icon, subs in DOMAINS:
             c = dcol.get(title, "#e2001a")
             out.append(f'<div class="domain"><div class="dh" style="background:{c};background-image:linear-gradient(90deg,rgba(255,255,255,.15),rgba(255,255,255,0))"><span class="ic">{icon}</span><h2>{html.escape(tl(title))}</h2></div><div class="dbody">')
@@ -1132,11 +1132,11 @@ function apost(url, body, msgid){
                 out.append('<div class="cards">')
                 for reg, name, unit, dec, signed in items:
                     if reg is None:
-                        out.append(f'<div class="note-card">â„¹ï¸ {html.escape(tl(name))}</div>')
+                        out.append(f'<div class="note-card">ℹ️ {html.escape(tl(name))}</div>')
                         continue
                     raw = vals.get(reg)
                     if reg in ENUM:
-                        txt = ENUM[reg].get(raw, f"Code {raw}") if raw is not None else "â€”"
+                        txt = ENUM[reg].get(raw, f"Code {raw}") if raw is not None else "—"
                         cls = "val" if raw is not None else "muted"
                     else:
                         txt, cls = fmt(raw, unit, dec, signed)
@@ -1147,17 +1147,17 @@ function apost(url, body, msgid){
                                f'<div class="v {cls}">{html.escape(txt)}</div><span class="tt">{d}</span></div>')
                 out.append('</div>')
             out.append('</div></div>')
-        out.append(f'<div class="note" style="margin-top:1rem">{L("Aktualisiert alle 10 s Â· â€” = kein Sensor / nicht belegt.","Updated every 10 s Â· â€” = no sensor / not assigned.")}</div>')
+        out.append(f'<div class="note" style="margin-top:1rem">{L("Aktualisiert alle 10 s · — = kein Sensor / nicht belegt.","Updated every 10 s · — = no sensor / not assigned.")}</div>')
         return "".join(out)
 
     def alle(self):
         m = regmap()
         if not m: return f'<h1>{L("Alle Werte","All values")}</h1><div class="note warn">{L("Register-Map nicht ladbar.","Register map not loadable.")}</div>'
         vals = read_all(sorted(m.keys()))
-        if not vals: return f'<h1>{L("Alle Werte","All values")}</h1><div class="note warn">âš ï¸ {L("BrÃ¼cke (Modbus :502) nicht erreichbar.","Bridge (Modbus :502) not reachable.")}</div>'
-        secs = [(L("WÃ¤rmepumpe (UnitId 1)","Heat pump (UnitId 1)"),"ðŸ”¥",1),(L("WohnraumlÃ¼ftung (UnitId 520)","Ventilation (UnitId 520)"),"ðŸ’¨",520)]
+        if not vals: return f'<h1>{L("Alle Werte","All values")}</h1><div class="note warn">⚠️ {L("Brücke (Modbus :502) nicht erreichbar.","Bridge (Modbus :502) not reachable.")}</div>'
+        secs = [(L("Wärmepumpe (UnitId 1)","Heat pump (UnitId 1)"),"🔥",1),(L("Wohnraumlüftung (UnitId 520)","Ventilation (UnitId 520)"),"💨",520)]
         out = [f'<h1>{L("Alle Live-Werte","All live values")}</h1>',
-               f'<p>{L("Automatisch aus dem CAN-Bus dekodiert â€” jeder Datenpunkt mit Register, Hoval-Bezeichnung und Wert. â€” = kein Sensor / nicht belegt.","Automatically decoded from the CAN bus â€” every data point with register, Hoval label and value. â€” = no sensor / not assigned.")}</p>']
+               f'<p>{L("Automatisch aus dem CAN-Bus dekodiert — jeder Datenpunkt mit Register, Hoval-Bezeichnung und Wert. — = kein Sensor / nicht belegt.","Automatically decoded from the CAN bus — every data point with register, Hoval label and value. — = no sensor / not assigned.")}</p>']
         tr=0; ts=0
         for title, icon, uid in secs:
             regs = sorted(r for r in m if m[r]["unit_id"]==uid)
@@ -1168,13 +1168,13 @@ function apost(url, body, msgid){
                 if sent: ts+=1; continue
                 tr+=1; real.append((reg, rt_name(reg, m[reg]["name"] or ""), txt))
             c = "#69b41e" if uid==520 else "#e2001a"
-            out.append(f'<div class="domain"><div class="dh" style="background:{c};background-image:linear-gradient(90deg,rgba(255,255,255,.15),rgba(255,255,255,0))"><span class="ic">{icon}</span><h2>{html.escape(title)} Â· {len(real)} {L("Werte","values")}</h2></div><div class="dbody">')
+            out.append(f'<div class="domain"><div class="dh" style="background:{c};background-image:linear-gradient(90deg,rgba(255,255,255,.15),rgba(255,255,255,0))"><span class="ic">{icon}</span><h2>{html.escape(title)} · {len(real)} {L("Werte","values")}</h2></div><div class="dbody">')
             out.append(f'<table><tr><th>{L("Register","Register")}</th><th>{L("Bezeichnung","Label")}</th><th>{L("Wert","Value")}</th></tr>')
             for reg,name,txt in real:
                 d = html.escape(rt_desc(reg) or desc(reg, name, m[reg].get("unit",""), m[reg].get("writable")))
                 out.append(f'<tr><td><code>{reg}</code></td><td title="{d}" style="cursor:help">{html.escape(name)}</td><td class="val">{html.escape(txt)}</td></tr>')
             out.append('</table></div></div>')
-        out.append(f'<div class="note ok" style="margin-top:1rem"><b>{tr}</b> {L("aktive Werte","active values")} Â· {ts} {L("Register ohne Sensor (â€”) Â· aktualisiert alle 10 s.","registers without sensor (â€”) Â· updated every 10 s.")}</div>')
+        out.append(f'<div class="note ok" style="margin-top:1rem"><b>{tr}</b> {L("aktive Werte","active values")} · {ts} {L("Register ohne Sensor (—) · aktualisiert alle 10 s.","registers without sensor (—) · updated every 10 s.")}</div>')
         return "".join(out)
 
     def loxone(self):
@@ -1192,9 +1192,9 @@ function apost(url, body, msgid){
                     rows += (f"<tr><td><code>{reg}</code></td><td title=\"{d}\" style=\"cursor:help\">{html.escape(name)}</td>"
                              f"<td>{html.escape(txt)}</td><td><span class=pill>{typ}</span></td></tr>")
         return f"""<h1>Anbindung an Loxone</h1>
-<p>Der Pi verhÃ¤lt sich wie ein <b>Hoval-Modbus-TCP-Gateway</b>. In Loxone Config ein
-<b>Modbus-TCP-GerÃ¤t</b> anlegen und die Holding-Register (Funktion 3) lesen. Die Registernummern
-entsprechen exakt der offiziellen Hoval-Modbus-Tabelle â€” die offiziellen Loxone-Hoval-Templates passen 1:1.</p>
+<p>Der Pi verhält sich wie ein <b>Hoval-Modbus-TCP-Gateway</b>. In Loxone Config ein
+<b>Modbus-TCP-Gerät</b> anlegen und die Holding-Register (Funktion 3) lesen. Die Registernummern
+entsprechen exakt der offiziellen Hoval-Modbus-Tabelle — die offiziellen Loxone-Hoval-Templates passen 1:1.</p>
 <div class="grid3">
  <div class="card"><div class="n">IP-Adresse</div><div class="v" style="font-size:1.05rem">192.168.1.168</div></div>
  <div class="card"><div class="n">Port</div><div class="v" style="font-size:1.05rem">502</div></div>
@@ -1203,21 +1203,21 @@ entsprechen exakt der offiziellen Hoval-Modbus-Tabelle â€” die offiziellen 
 </div>
 <h2 class="sec">Register-Auswahl (Live-Werte)</h2>
 <table><tr><th>Register</th><th>Bedeutung</th><th>Wert</th><th>Typ</th></tr>{rows}</table>
-<div class="note" style="margin-top:1rem">Insgesamt <b>439 Register</b> (368 WÃ¤rmepumpe + 71 LÃ¼ftung). Werte sind
-<b>Rohwerte</b> wie beim Hoval-Gateway â€” Loxone skaliert (z. B. Â°C Ã—10) im Template.</div>"""
+<div class="note" style="margin-top:1rem">Insgesamt <b>439 Register</b> (368 Wärmepumpe + 71 Lüftung). Werte sind
+<b>Rohwerte</b> wie beim Hoval-Gateway — Loxone skaliert (z. B. °C ×10) im Template.</div>"""
 
     def homeassistant(self):
         return f"""<h1>Anbindung an Home Assistant</h1>
-<p>HoxPi spricht <b>Modbus-TCP</b>, das Home Assistant von Haus aus unterstÃ¼tzt. Du musst nichts
+<p>HoxPi spricht <b>Modbus-TCP</b>, das Home Assistant von Haus aus unterstützt. Du musst nichts
 von Hand abtippen: Lade die fertige Konfiguration herunter, leg sie in den <code>packages</code>-Ordner,
-HA neu starten â€” <b>alle Sensoren erscheinen automatisch</b>, bereits richtig skaliert (Â°C, %, kW â€¦).</p>
+HA neu starten — <b>alle Sensoren erscheinen automatisch</b>, bereits richtig skaliert (°C, %, kW …).</p>
 <div style="text-align:center;margin:1.3rem 0">
  <a href="/hoxpi-ha.yaml" download style="display:inline-block;background:#41bdf5;color:#08334a;
   font-weight:700;font-size:1.05rem;padding:.8rem 1.6rem;border-radius:11px;text-decoration:none;
-  box-shadow:0 4px 14px rgba(65,189,245,.35)">â¬‡ hoxpi.yaml herunterladen</a>
+  box-shadow:0 4px 14px rgba(65,189,245,.35)">⬇ hoxpi.yaml herunterladen</a>
  <div style="color:#6c7787;font-size:.85rem;margin-top:.5rem">fertige Modbus-Konfiguration, automatisch aus der Hoval-Tabelle erzeugt</div>
 </div>
-<div class="domain"><div class="dh" style="background:#41bdf5;background-image:linear-gradient(90deg,rgba(255,255,255,.18),rgba(255,255,255,0))"><span class="ic">ðŸ </span><h2>In 3 Schritten importieren</h2></div><div class="dbody">
+<div class="domain"><div class="dh" style="background:#41bdf5;background-image:linear-gradient(90deg,rgba(255,255,255,.18),rgba(255,255,255,0))"><span class="ic">🏠</span><h2>In 3 Schritten importieren</h2></div><div class="dbody">
 <ol style="line-height:1.8;color:#3a4554">
 <li>Datei <code>hoxpi.yaml</code> herunterladen (Button oben) und nach
  <code>&lt;config&gt;/packages/hoxpi.yaml</code> kopieren (Ordner <code>packages</code> ggf. anlegen).</li>
@@ -1229,69 +1229,69 @@ HA neu starten â€” <b>alle Sensoren erscheinen automatisch</b>, bereits ric
 <div class="grid3">
  <div class="card"><div class="n">IP-Adresse</div><div class="v" style="font-size:1.05rem">192.168.1.168</div></div>
  <div class="card"><div class="n">Port</div><div class="v" style="font-size:1.05rem">502</div></div>
- <div class="card"><div class="n">Protokoll</div><div class="v" style="font-size:1.05rem">Modbus-TCP Â· FC 3</div></div>
+ <div class="card"><div class="n">Protokoll</div><div class="v" style="font-size:1.05rem">Modbus-TCP · FC 3</div></div>
 </div>
-<div class="note ok" style="margin-top:1rem">Anders als bei Loxone sind die Werte hier schon <b>fertig skaliert</b> â€“
-Temperaturen in Â°C, Leistungen in kW usw. â€“ weil Home Assistant das in der YAML Ã¼bernimmt.</div>
-<div class="note warn" style="margin-top:.8rem">Hinweis: Einen echten â€žEin-Klick"-Import gibt es bei Modbus in HA (noch) nicht â€“
-das Herunterladen + Ablegen der Datei ist der schnellste offiziell unterstÃ¼tzte Weg.
+<div class="note ok" style="margin-top:1rem">Anders als bei Loxone sind die Werte hier schon <b>fertig skaliert</b> –
+Temperaturen in °C, Leistungen in kW usw. – weil Home Assistant das in der YAML übernimmt.</div>
+<div class="note warn" style="margin-top:.8rem">Hinweis: Einen echten „Ein-Klick"-Import gibt es bei Modbus in HA (noch) nicht –
+das Herunterladen + Ablegen der Datei ist der schnellste offiziell unterstützte Weg.
 Falls deine Pi-IP nicht <code>192.168.1.168</code> ist, in der Datei oben den <code>host:</code> anpassen.</div>"""
 
     def anleitung(self):
-        return f"""<h1>Anleitung â€” Installation & Anbindung</h1>
-<p>Von der Verkabelung bis zur fertigen Anbindung in Loxone oder Home Assistant. HoxPi verhÃ¤lt sich
-nach auÃŸen wie ein <b>originaler Hoval-Modbus-Gateway</b> â€” deshalb funktionieren die offiziellen Vorlagen 1:1.</p>
+        return f"""<h1>Anleitung — Installation & Anbindung</h1>
+<p>Von der Verkabelung bis zur fertigen Anbindung in Loxone oder Home Assistant. HoxPi verhält sich
+nach außen wie ein <b>originaler Hoval-Modbus-Gateway</b> — deshalb funktionieren die offiziellen Vorlagen 1:1.</p>
 
-<div class="domain"><div class="dh" style="background:#c2185b;background-image:linear-gradient(90deg,rgba(255,255,255,.15),rgba(255,255,255,0))"><span class="ic">ðŸ”Œ</span><h2>1 Â· Hardware anschlieÃŸen</h2></div><div class="dbody">
+<div class="domain"><div class="dh" style="background:#c2185b;background-image:linear-gradient(90deg,rgba(255,255,255,.15),rgba(255,255,255,0))"><span class="ic">🔌</span><h2>1 · Hardware anschließen</h2></div><div class="dbody">
 <ul style="line-height:1.8">
 <li>USB-CAN-Adapter (DSD-TECH SH-C30G) in den Raspberry Pi stecken.</li>
-<li>Die drei CAN-Adern am Hoval <b>WEZ-Modul</b>, Klemme â€ž+ âš H L", <b>parallel</b> mit aufklemmen
-(der bestehende Bus lÃ¤uft unverÃ¤ndert weiter): <b>H = blau, L = orange, âš = grÃ¼n</b>.</li>
-<li>Am WEZ-Modul liegt der echte <b>TopTronic-E-CAN</b> (50 kbit/s, 64 Î© terminiert).
-<b>Nicht</b> an Klemme X4 â€” das ist RS485, kein CAN.</li>
+<li>Die drei CAN-Adern am Hoval <b>WEZ-Modul</b>, Klemme „+ ⏚ H L", <b>parallel</b> mit aufklemmen
+(der bestehende Bus läuft unverändert weiter): <b>H = blau, L = orange, ⏚ = grün</b>.</li>
+<li>Am WEZ-Modul liegt der echte <b>TopTronic-E-CAN</b> (50 kbit/s, 64 Ω terminiert).
+<b>Nicht</b> an Klemme X4 — das ist RS485, kein CAN.</li>
 <li>Pi mit Strom versorgen (PoE-Splitter am Netzwerkkabel oder USB-Netzteil).</li>
 </ul></div></div>
 
-<div class="domain"><div class="dh" style="background:#e2001a;background-image:linear-gradient(90deg,rgba(255,255,255,.15),rgba(255,255,255,0))"><span class="ic">ðŸ’»</span><h2>2 Â· Software / Pi</h2></div><div class="dbody">
+<div class="domain"><div class="dh" style="background:#e2001a;background-image:linear-gradient(90deg,rgba(255,255,255,.15),rgba(255,255,255,0))"><span class="ic">💻</span><h2>2 · Software / Pi</h2></div><div class="dbody">
 <p>Auf dem Pi laufen mehrere Dienste mit Autostart: <code>can0</code> (CAN-Schnittstelle), die
-<b>HoxPi-BrÃ¼cke</b> (CAN â†’ Modbus-TCP :502) , dieses Dashboard (Port 80) sowie optional Exporter/Prometheus/Grafana fÃ¼r die Statistik. Einmal eingerichtet
+<b>HoxPi-Brücke</b> (CAN → Modbus-TCP :502) , dieses Dashboard (Port 80) sowie optional Exporter/Prometheus/Grafana für die Statistik. Einmal eingerichtet
 startet alles nach jedem Strom-Aus von selbst.</p>
-<div class="note">Pi im Netzwerk erreichbar unter <code>192.168.1.168</code> Â· Dashboard: einfach diese Seite.
-Bridge-Status: lÃ¤uft &amp; liest live.</div></div></div>
+<div class="note">Pi im Netzwerk erreichbar unter <code>192.168.1.168</code> · Dashboard: einfach diese Seite.
+Bridge-Status: läuft &amp; liest live.</div></div></div>
 
-<div class="domain"><div class="dh" style="background:#69b41e;background-image:linear-gradient(90deg,rgba(255,255,255,.15),rgba(255,255,255,0))"><span class="ic">ðŸŸ©</span><h2>3 Â· Loxone anbinden</h2></div><div class="dbody">
-<p>In <b>Loxone Config</b> ein <b>Modbus-TCP-GerÃ¤t</b> anlegen â†’ IP <code>192.168.1.168</code>, Port <code>502</code>.
-Dann die passenden Hoval-<b>Templates</b> aus der <b>Loxone Library</b> einbinden (so heiÃŸen die fertigen
-GerÃ¤te-Integrationen dort â€” nicht â€žVorlagen"). Welches Template du brauchst, hÃ¤ngt vom Anlagenteil ab:</p>
+<div class="domain"><div class="dh" style="background:#69b41e;background-image:linear-gradient(90deg,rgba(255,255,255,.15),rgba(255,255,255,0))"><span class="ic">🟩</span><h2>3 · Loxone anbinden</h2></div><div class="dbody">
+<p>In <b>Loxone Config</b> ein <b>Modbus-TCP-Gerät</b> anlegen → IP <code>192.168.1.168</code>, Port <code>502</code>.
+Dann die passenden Hoval-<b>Templates</b> aus der <b>Loxone Library</b> einbinden (so heißen die fertigen
+Geräte-Integrationen dort — nicht „Vorlagen"). Welches Template du brauchst, hängt vom Anlagenteil ab:</p>
 <table><tr><th>Anlagenteil</th><th>Loxone-Template</th><th>wann nehmen</th></tr>
-<tr><td>WÃ¤rmepumpe<br>(Heizen, KÃ¼hlen, Warmwasser)</td>
+<tr><td>Wärmepumpe<br>(Heizen, Kühlen, Warmwasser)</td>
 <td><a href="https://library.loxone.com/detail/template-hoval-at-769/overview" target="_blank">Hoval Heating &amp; Cooling</a></td>
-<td><b>immer</b> â€” das ist die Hauptintegration: Vorlauftemperaturen der Heizkreise und Warmwasser werden hierÃ¼ber geregelt.</td></tr>
-<tr><td>WohnraumlÃ¼ftung<br>(HomeVent)</td>
+<td><b>immer</b> — das ist die Hauptintegration: Vorlauftemperaturen der Heizkreise und Warmwasser werden hierüber geregelt.</td></tr>
+<tr><td>Wohnraumlüftung<br>(HomeVent)</td>
 <td><a href="https://library.loxone.com/detail/hoval-template-884/overview" target="_blank">Hoval Ventilation</a></td>
-<td>wenn die <b>LÃ¼ftung</b> in Loxone sichtbar/steuerbar sein soll (Stufen, Feuchte, Temperaturen).</td></tr>
+<td>wenn die <b>Lüftung</b> in Loxone sichtbar/steuerbar sein soll (Stufen, Feuchte, Temperaturen).</td></tr>
 <tr><td>Energiemanagement</td>
 <td><a href="https://library.loxone.com/detail/hoval-energy-management-1845/overview" target="_blank">Hoval Energy Management</a></td>
-<td><b>optional</b> â€” nur wenn Loxone die WP energieoptimiert fahren soll (z. B. PV-Ãœberschuss, Lastverschiebung).</td></tr>
+<td><b>optional</b> — nur wenn Loxone die WP energieoptimiert fahren soll (z. B. PV-Überschuss, Lastverschiebung).</td></tr>
 </table>
-<div class="note" style="margin-top:.8rem">FÃ¼r deine Anlage: <b>Heating &amp; Cooling</b> (WÃ¤rmepumpe) + <b>Ventilation</b> (LÃ¼ftung).
-Energy Management nur bei Bedarf. Jedes Template hat im Download-Bereich eine deutsche â€žPraxisanleitung Hoval-Loxone".</div>
-<div class="note ok" style="margin-top:.6rem">Die Templates erwarten einen <b>Hoval-Modbus-Gateway</b> â€” genau den spielt HoxPi.
+<div class="note" style="margin-top:.8rem">Für deine Anlage: <b>Heating &amp; Cooling</b> (Wärmepumpe) + <b>Ventilation</b> (Lüftung).
+Energy Management nur bei Bedarf. Jedes Template hat im Download-Bereich eine deutsche „Praxisanleitung Hoval-Loxone".</div>
+<div class="note ok" style="margin-top:.6rem">Die Templates erwarten einen <b>Hoval-Modbus-Gateway</b> — genau den spielt HoxPi.
 Registernummern stimmen exakt mit der Hoval-Tabelle, also passen sie ohne Anpassung.
-Werte sind <b>Rohwerte</b> (z. B. Â°C Ã—10) â€” das Template skaliert selbst. Mehr dazu: der Loxone-Abschnitt weiter oben.</div></div></div>
+Werte sind <b>Rohwerte</b> (z. B. °C ×10) — das Template skaliert selbst. Mehr dazu: der Loxone-Abschnitt weiter oben.</div></div></div>
 
-<div class="domain"><div class="dh" style="background:#41bdf5;background-image:linear-gradient(90deg,rgba(255,255,255,.18),rgba(255,255,255,0))"><span class="ic">ðŸ </span><h2>4 Â· Home Assistant anbinden</h2></div><div class="dbody">
+<div class="domain"><div class="dh" style="background:#41bdf5;background-image:linear-gradient(90deg,rgba(255,255,255,.18),rgba(255,255,255,0))"><span class="ic">🏠</span><h2>4 · Home Assistant anbinden</h2></div><div class="dbody">
 <p>Fertige Konfiguration im Home-Assistant-Abschnitt weiter oben herunterladen
-(<code>hoxpi.yaml</code>), in den <code>packages</code>-Ordner legen, HA neu starten â€” alle Sensoren
-erscheinen automatisch und sind bereits skaliert (Â°C, %, kW â€¦).</p></div></div>
+(<code>hoxpi.yaml</code>), in den <code>packages</code>-Ordner legen, HA neu starten — alle Sensoren
+erscheinen automatisch und sind bereits skaliert (°C, %, kW …).</p></div></div>
 
-<div class="domain"><div class="dh" style="background:#1c2531;background-image:linear-gradient(90deg,rgba(255,255,255,.12),rgba(255,255,255,0))"><span class="ic">ðŸ’¡</span><h2>5 Â· Tipps &amp; Hinweise</h2></div><div class="dbody">
+<div class="domain"><div class="dh" style="background:#1c2531;background-image:linear-gradient(90deg,rgba(255,255,255,.12),rgba(255,255,255,0))"><span class="ic">💡</span><h2>5 · Tipps &amp; Hinweise</h2></div><div class="dbody">
 <ul style="line-height:1.8">
-<li>Der CAN-Abgriff ist <b>passiv &amp; parallel</b> â€” die bestehende Anlage bleibt unberÃ¼hrt.</li>
-<li>HoxPi startet <b>schreibgeschÃ¼tzt</b>. Steuern (Sollwerte Ã¤ndern) lÃ¤sst sich gezielt freischalten,
-nur fÃ¼r sinnvolle, geprÃ¼fte Werte.</li>
-<li>Andere Pi-IP? Dann in der Home-Assistant-Datei den <code>host:</code> und in Loxone die GerÃ¤te-IP anpassen.</li>
-<li>Alles bleibt <b>lokal</b>, kein Cloud-Zugang nÃ¶tig.</li>
+<li>Der CAN-Abgriff ist <b>passiv &amp; parallel</b> — die bestehende Anlage bleibt unberührt.</li>
+<li>HoxPi startet <b>schreibgeschützt</b>. Steuern (Sollwerte ändern) lässt sich gezielt freischalten,
+nur für sinnvolle, geprüfte Werte.</li>
+<li>Andere Pi-IP? Dann in der Home-Assistant-Datei den <code>host:</code> und in Loxone die Geräte-IP anpassen.</li>
+<li>Alles bleibt <b>lokal</b>, kein Cloud-Zugang nötig.</li>
 </ul></div></div>"""
 
 class Server(socketserver.ThreadingTCPServer):
