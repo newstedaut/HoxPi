@@ -333,8 +333,9 @@ foreach ($p in $targets) {
   if ($cfg.mcpServers.PSObject.Properties['hoxpi']) { $cfg.mcpServers.hoxpi = $hox }
   else { $cfg.mcpServers | Add-Member -MemberType NoteProperty -Name hoxpi -Value $hox }
   $json = $cfg | ConvertTo-Json -Depth 10
-  try { Set-Content -Path $p -Value $json -Encoding UTF8 }
-  catch { Start-Sleep 3; Set-Content -Path $p -Value $json -Encoding UTF8 }
+  $enc = New-Object System.Text.UTF8Encoding($false)
+  try { [System.IO.File]::WriteAllText($p, $json, $enc) }
+  catch { Start-Sleep 3; [System.IO.File]::WriteAllText($p, $json, $enc) }
 }
 Write-Host 'HoxPi eingetragen. Claude wird gestartet...'
 $gestartet = $false
