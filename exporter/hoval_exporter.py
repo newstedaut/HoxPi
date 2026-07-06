@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """HoxPi Prometheus-Exporter: liest kuratierte Register der Bridge (Modbus localhost:502)."""
-import http.server, socketserver, socket, struct
+import http.server, socketserver, socket, struct, threading
 
 # name -> (reg, scale, signed)
 R16 = {
@@ -39,15 +39,31 @@ HELP = {
  "hoval_sg_status": "0=Normal 1=Vorzug 2=Gesperrt 3=Abnahmezwang",
 }
 _tid = [0]
-def rd(addr, words=1):
-    _tid[0] += 1
-    try:
+_conn = {"sock": None}
+_lock = threading.Lock()
+def _sock():
+    if _conn["sock"] is None:
         s = socket.create_connection(("127.0.0.1", 502), 3); s.settimeout(3)
-        s.sendall(struct.pack(">HHHBBHH", _tid[0], 0, 6, 1, 3, addr, words))
-        r = s.recv(260); s.close()
-        if r[7] & 0x80: return None
-        return [struct.unpack(">H", r[9+2*i:11+2*i])[0] for i in range(words)]
-    except Exception:
+        _conn["sock"] = s
+    return _conn["sock"]
+def _drop():
+    try: _conn["sock"].close()
+    except Exception: pass
+    _conn["sock"] = None
+def rd(addr, words=1):
+    # Persistente Modbus-Verbindung wiederverwenden (verhindert TIME_WAIT-Anhaeufung).
+    # Bei Fehler Verbindung verwerfen und einmal neu versuchen.
+    with _lock:
+        _tid[0] = (_tid[0] + 1) & 0xFFFF
+        for _ in range(2):
+            try:
+                s = _sock()
+                s.sendall(struct.pack(">HHHBBHH", _tid[0], 0, 6, 1, 3, addr, words))
+                r = s.recv(260)
+                if not r or (r[7] & 0x80): return None
+                return [struct.unpack(">H", r[9+2*i:11+2*i])[0] for i in range(words)]
+            except Exception:
+                _drop()
         return None
 
 def metrics():
