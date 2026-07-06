@@ -9,7 +9,7 @@ Schreiben: standardmäßig AUS (config.json: {"enable_write": true} zum Aktivier
 Jeder Write läuft zusätzlich durch die Bridge-Sicherungen (Whitelist,
 Wertebereich, Rate-Limit, Kalt-Cache).
 """
-import json, socket, struct, subprocess, urllib.request, urllib.parse
+import json, socket, struct, subprocess, threading, urllib.request, urllib.parse
 import time as _time
 from mcp.server.fastmcp import FastMCP
 
@@ -62,24 +62,41 @@ ST_HP = {0: "Aus", 1: "Heizen", 2: "Aktiv-Kühlen", 3: "Sperre", 4: "Warmwasser-
 ST_SG = {0: "Normal", 1: "Vorzugbetrieb", 2: "Gesperrt", 3: "Abnahmezwang", 255: "inaktiv"}
 
 _tid = [0]
-def _rd(addr, words=1):
-    _tid[0] += 1
-    try:
+_conn = {"sock": None}
+_lock = threading.Lock()
+def _sock():
+    if _conn["sock"] is None:
         s = socket.create_connection(("127.0.0.1", 502), 3); s.settimeout(3)
-        s.sendall(struct.pack(">HHHBBHH", _tid[0], 0, 6, 1, 3, addr, words))
-        r = s.recv(260); s.close()
-        if r[7] & 0x80:
-            return None
-        return [struct.unpack(">H", r[9 + 2 * i:11 + 2 * i])[0] for i in range(words)]
-    except Exception:
+        _conn["sock"] = s
+    return _conn["sock"]
+def _drop():
+    try: _conn["sock"].close()
+    except Exception: pass
+    _conn["sock"] = None
+def _mb(fc, addr, val_or_words):
+    # Persistente Modbus-Verbindung wiederverwenden (verhindert TIME_WAIT-Anhaeufung).
+    with _lock:
+        _tid[0] = (_tid[0] + 1) & 0xFFFF
+        for _ in range(2):
+            try:
+                s = _sock()
+                s.sendall(struct.pack(">HHHBBHH", _tid[0], 0, 6, 1, fc, addr, val_or_words))
+                r = s.recv(260)
+                if not r or (r[7] & 0x80):
+                    return None
+                if fc == 3:
+                    words = val_or_words
+                    return [struct.unpack(">H", r[9 + 2 * i:11 + 2 * i])[0] for i in range(words)]
+                return True
+            except Exception:
+                _drop()
         return None
 
+def _rd(addr, words=1):
+    return _mb(3, addr, words)
+
 def _wr(addr, value):
-    _tid[0] += 1
-    s = socket.create_connection(("127.0.0.1", 502), 3); s.settimeout(3)
-    s.sendall(struct.pack(">HHHBBHH", _tid[0], 0, 6, 1, 6, addr, value & 0xFFFF))
-    r = s.recv(260); s.close()
-    return not (r[7] & 0x80)
+    return _mb(6, addr, value & 0xFFFF) is not None
 
 def _scaled(reg, raw=None):
     r = _regmap().get(reg)
