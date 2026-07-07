@@ -451,7 +451,7 @@ def decode_reg(r, raw):
 
 HA_UNITS = {"°C","%","bar","kW","kWh","Wh","W","V","A","Hz","h","min","l/h","m³/h","rpm","ppm","K","%RH"}
 
-def ha_yaml(host="192.168.1.168"):
+def ha_yaml(host="192.168.1.50"):
     m = regmap()
     L = ["# HoxPi -> Home Assistant (Modbus TCP) - automatisch erzeugt",
          "# Einbau: Datei nach  <config>/packages/hoxpi.yaml  kopieren.",
@@ -576,7 +576,7 @@ FLAG_EN = ('<svg viewBox="0 0 36 24" xmlns="http://www.w3.org/2000/svg" aria-hid
  '<circle cx="21.5" cy="5" r="0.7" fill="#fff"/><circle cx="24.3" cy="5" r="0.7" fill="#fff"/>'
  '<circle cx="20" cy="7.7" r="0.7" fill="#fff"/><circle cx="23" cy="7.7" r="0.7" fill="#fff"/><circle cx="25.8" cy="7.7" r="0.7" fill="#fff"/></svg>')
 
-PIPHOST_JS = ('<script>/*piphost-rewrite*/(function(){var h=location.hostname;''if(!h||h==="192.168.1.168")return;''document.querySelectorAll("main code, main .v, main pre").forEach(function(el){''if(el.textContent.indexOf("192.168.1.168")>=0)''el.textContent=el.textContent.replace(/192\\.168\\.1\\.168/g,h);});})();</script>')
+PIPHOST_JS = ('<script>/*piphost-rewrite*/(function(){var h=location.hostname;''if(!h||h==="192.168.1.50")return;''document.querySelectorAll("main code, main .v, main pre").forEach(function(el){''if(el.textContent.indexOf("192.168.1.50")>=0)''el.textContent=el.textContent.replace(/192\\.168\\.1\\.168/g,h);});})();</script>')
 
 def page(title, active, body, refresh=False, path="/"):
     rf = '<meta http-equiv=refresh content=10>' if refresh else ''
@@ -639,7 +639,7 @@ class H(http.server.BaseHTTPRequestHandler):
             lang = "de"
         _ctx.lang = lang
         if p in ("/hoxpi-claude-setup.bat", "/hoxpi-claude-setup.ps1", "/hoxpi-claude-setup.sh"):
-            host = (self.headers.get("Host") or "192.168.1.168").split(":")[0]
+            host = (self.headers.get("Host") or "192.168.1.50").split(":")[0]
             if p.endswith(".bat"):
                 data = claude_setup_bat(host).encode("utf-8")
             elif p.endswith(".sh"):
@@ -780,7 +780,7 @@ function tgl(cb,reg){
         return f"""<h1>{L("Integration \u2013 Loxone & Home Assistant","Integration \u2013 Loxone & Home Assistant")}</h1>
 <p>{L("HoxPi verh\u00e4lt sich nach au\u00dfen wie ein <b>originaler Hoval-Modbus-TCP-Gateway</b>. Beide Systeme verbinden sich einfach per Modbus-TCP \u2013 nichts muss \u201egepusht\u201c werden, die Register liegen einfach bereit.","HoxPi behaves like an <b>original Hoval Modbus-TCP gateway</b>. Both systems simply connect via Modbus-TCP \u2013 nothing has to be pushed, the registers are just there.")}</p>
 <div class="grid3">
- <div class="card"><div class="n">{L("IP-Adresse","IP address")}</div><div class="v" style="font-size:1.05rem">192.168.1.168</div></div>
+ <div class="card"><div class="n">{L("IP-Adresse","IP address")}</div><div class="v" style="font-size:1.05rem">192.168.1.50</div></div>
  <div class="card"><div class="n">Port</div><div class="v" style="font-size:1.05rem">502</div></div>
  <div class="card"><div class="n">{L("Lesen / Schreiben","Read / write")}</div><div class="v" style="font-size:1.05rem">FC 3 / FC 6</div></div>
 </div>
@@ -1089,7 +1089,7 @@ function apost(url, body, msgid){
 {schema()}
 <div class="grid3" style="margin-top:1rem">
   <div class="card"><div class="n">{L("Datenfluss","Data flow")}</div><div class="v" style="font-size:1rem">CAN → Pi → Modbus</div></div>
-  <div class="card"><div class="n">{L("Adresse (Modbus-TCP)","Address (Modbus-TCP)")}</div><div class="v" style="font-size:1.05rem">192.168.1.168:502</div></div>
+  <div class="card"><div class="n">{L("Adresse (Modbus-TCP)","Address (Modbus-TCP)")}</div><div class="v" style="font-size:1.05rem">192.168.1.50:502</div></div>
   <div class="card"><div class="n">{L("Status","Status")}</div><div class="v ok" style="font-size:1.05rem">{L("aktiv · liest live","active · reading live")}</div></div>
 </div>
 <div class="domain"><div class="dh" style="background:#c2185b;background-image:linear-gradient(90deg,rgba(255,255,255,.15),rgba(255,255,255,0))"><span class="ic">🛒</span><h2>{L("Hardware-Vorschlag","Hardware suggestion")}</h2></div><div class="dbody">
@@ -1197,7 +1197,7 @@ function apost(url, body, msgid){
 <b>Modbus-TCP-Gerät</b> anlegen und die Holding-Register (Funktion 3) lesen. Die Registernummern
 entsprechen exakt der offiziellen Hoval-Modbus-Tabelle — die offiziellen Loxone-Hoval-Templates passen 1:1.</p>
 <div class="grid3">
- <div class="card"><div class="n">IP-Adresse</div><div class="v" style="font-size:1.05rem">192.168.1.168</div></div>
+ <div class="card"><div class="n">IP-Adresse</div><div class="v" style="font-size:1.05rem">192.168.1.50</div></div>
  <div class="card"><div class="n">Port</div><div class="v" style="font-size:1.05rem">502</div></div>
  <div class="card"><div class="n">Lesen</div><div class="v" style="font-size:1.05rem">FC 3</div></div>
  <div class="card"><div class="n">Schreiben</div><div class="v" style="font-size:1.05rem">gezielt frei</div></div>
@@ -1228,7 +1228,7 @@ HA neu starten — <b>alle Sensoren erscheinen automatisch</b>, bereits richtig 
 <li><b>Home Assistant neu starten.</b> Danach findest du alle Werte als <code>sensor.hoxpi_*</code>.</li>
 </ol></div></div>
 <div class="grid3">
- <div class="card"><div class="n">IP-Adresse</div><div class="v" style="font-size:1.05rem">192.168.1.168</div></div>
+ <div class="card"><div class="n">IP-Adresse</div><div class="v" style="font-size:1.05rem">192.168.1.50</div></div>
  <div class="card"><div class="n">Port</div><div class="v" style="font-size:1.05rem">502</div></div>
  <div class="card"><div class="n">Protokoll</div><div class="v" style="font-size:1.05rem">Modbus-TCP · FC 3</div></div>
 </div>
@@ -1236,7 +1236,7 @@ HA neu starten — <b>alle Sensoren erscheinen automatisch</b>, bereits richtig 
 Temperaturen in °C, Leistungen in kW usw. – weil Home Assistant das in der YAML übernimmt.</div>
 <div class="note warn" style="margin-top:.8rem">Hinweis: Einen echten „Ein-Klick"-Import gibt es bei Modbus in HA (noch) nicht –
 das Herunterladen + Ablegen der Datei ist der schnellste offiziell unterstützte Weg.
-Falls deine Pi-IP nicht <code>192.168.1.168</code> ist, in der Datei oben den <code>host:</code> anpassen.</div>"""
+Falls deine Pi-IP nicht <code>192.168.1.50</code> ist, in der Datei oben den <code>host:</code> anpassen.</div>"""
 
     def anleitung(self):
         return f"""<h1>Anleitung — Installation & Anbindung</h1>
@@ -1257,11 +1257,11 @@ nach außen wie ein <b>originaler Hoval-Modbus-Gateway</b> — deshalb funktioni
 <p>Auf dem Pi laufen mehrere Dienste mit Autostart: <code>can0</code> (CAN-Schnittstelle), die
 <b>HoxPi-Brücke</b> (CAN → Modbus-TCP :502) , dieses Dashboard (Port 80) sowie optional Exporter/Prometheus/Grafana für die Statistik. Einmal eingerichtet
 startet alles nach jedem Strom-Aus von selbst.</p>
-<div class="note">Pi im Netzwerk erreichbar unter <code>192.168.1.168</code> · Dashboard: einfach diese Seite.
+<div class="note">Pi im Netzwerk erreichbar unter <code>192.168.1.50</code> · Dashboard: einfach diese Seite.
 Bridge-Status: läuft &amp; liest live.</div></div></div>
 
 <div class="domain"><div class="dh" style="background:#69b41e;background-image:linear-gradient(90deg,rgba(255,255,255,.15),rgba(255,255,255,0))"><span class="ic">🟩</span><h2>3 · Loxone anbinden</h2></div><div class="dbody">
-<p>In <b>Loxone Config</b> ein <b>Modbus-TCP-Gerät</b> anlegen → IP <code>192.168.1.168</code>, Port <code>502</code>.
+<p>In <b>Loxone Config</b> ein <b>Modbus-TCP-Gerät</b> anlegen → IP <code>192.168.1.50</code>, Port <code>502</code>.
 Dann die passenden Hoval-<b>Templates</b> aus der <b>Loxone Library</b> einbinden (so heißen die fertigen
 Geräte-Integrationen dort — nicht „Vorlagen"). Welches Template du brauchst, hängt vom Anlagenteil ab:</p>
 <table><tr><th>Anlagenteil</th><th>Loxone-Template</th><th>wann nehmen</th></tr>

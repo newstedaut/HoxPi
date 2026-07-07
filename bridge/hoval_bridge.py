@@ -309,7 +309,9 @@ class Bridge:
             payload = bytes([0x01, OP_SET, r["fg"] & 0xFF, r["fn"] & 0xFF,
                              (dp >> 8) & 0xFF, dp & 0xFF]) + data
             try:
-                self.bus.send(can.Message(arbitration_id=ARB_WRITE,
+                # HomeVent/Lueftung (UnitId 520) hoert auf ARB_HV_POLL auch fuer SET;
+                # WEZ-Schreib-ID (ARB_WRITE) wuerde von der Lueftung ignoriert.
+                self.bus.send(can.Message(arbitration_id=(ARB_HV_POLL if r.get("unit_id")==520 else ARB_WRITE),
                                           data=payload, is_extended_id=True))
                 log.info("SET reg %d (%s) <- %s (raw)", reg, r.get("name"), v)
             except Exception as e:
