@@ -1,0 +1,8 @@
+[Unit]
+Description=HoxPi: Hoval-Datenpunktliste aktualisieren (registers.json/reg_texts.json)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /home/admin/hoval-bridge/tools/update_datapoints.py --apply --restart
