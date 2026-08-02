@@ -1,0 +1,10 @@
+[Unit]
+Description=HoxPi: monatlicher Check auf neue Hoval-Datenpunktliste
+
+[Timer]
+OnCalendar=monthly
+RandomizedDelaySec=6h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
