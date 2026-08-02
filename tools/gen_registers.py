@@ -27,7 +27,7 @@ def main():
     out_path = sys.argv[3] if len(sys.argv) > 3 else "registers.json"
 
     import openpyxl
-    wb = openpyxl.load_workbook(xlsx, read_only=True)
+    wb = openpyxl.load_workbook(xlsx, read_only=True, data_only=True)
     sheet = next((s for s in wb.sheetnames if s.lower().startswith("eng")), wb.sheetnames[0])
     ws = wb[sheet]
 
