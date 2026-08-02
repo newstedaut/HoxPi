@@ -11,7 +11,7 @@ kennt, antworten am CAN einfach nie und bleiben leer; sie stoeren nicht.
 Aufruf:
   python3 update_datapoints.py --check            nur pruefen, nichts aendern
   python3 update_datapoints.py --apply            bei Aenderung neu erzeugen (+Backup)
-  python3 update_datapoints.py --apply --restart  danach hoval-bridge neu starten
+  python3 update_datapoints.py --apply --restart  danach betroffene Dienste neu starten
 
 Unit-IDs werden aus der vorhandenen registers.json uebernommen (Fallback 1,520,143).
 Die xlsx selbst wird nur temporaer verarbeitet und NICHT dauerhaft gespeichert
@@ -112,8 +112,13 @@ def main():
         print(f"Uebernommen. Backups: {REG}.bak / {TXT}.bak")
 
         if "--restart" in args:
-            print("Starte hoval-bridge neu ...")
-            subprocess.run(["systemctl", "restart", "hoval-bridge"], check=False)
+            # Alle Dienste neu starten, die registers.json/reg_texts.json beim
+            # Start einlesen (nicht nur die Bridge - sonst arbeiten MCP/MQTT/
+            # Dashboard mit der alten Karte weiter). Fehlende Dienste werden
+            # still uebersprungen.
+            for svc in ("hoval-bridge", "hoxpi-mcp", "hoval-mqtt", "hoval-status"):
+                print(f"Starte {svc} neu ...")
+                subprocess.run(["systemctl", "restart", svc], check=False)
             print("Hinweis: Bridge lehnt Schreibzugriffe ab, bis jedes Register "
                   "einmal vom CAN gelesen wurde (Kalt-Cache-Schutz).")
     return 0
