@@ -247,7 +247,11 @@ class Bridge:
             seen.add(key)
             if r["unit_id"] == 1:
                 wez.append((ARB_POLL, r))
-            elif r["unit_id"] == 520 and r["fg"] == 50:
+            elif r["unit_id"] == 520:
+                # ALLE Lueftungs-Register pollen, nicht nur fg=50 (Betriebswerte).
+                # fg=0 enthaelt u.a. Wartungs-/Filterzaehler (28934-28946) und den
+                # Fehlerspeicher (24150-24194); die blieben sonst dauerhaft leer.
+                # Aufwand unkritisch: ~72 statt 13 Register = 7 s je 30-s-Zyklus.
                 hv.append((ARB_HV_POLL, r))
         return wez, hv
 
