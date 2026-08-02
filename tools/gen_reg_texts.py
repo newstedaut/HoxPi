@@ -45,7 +45,7 @@ def main():
     if len(sys.argv) < 3:
         print(__doc__); sys.exit(1)
     import openpyxl
-    wb = openpyxl.load_workbook(sys.argv[1], read_only=True)
+    wb = openpyxl.load_workbook(sys.argv[1], read_only=True, data_only=True)
     regs = json.load(open(sys.argv[2], encoding="utf-8"))
     wanted = {r["reg"] for r in regs}
     out_path = sys.argv[3] if len(sys.argv) > 3 else "reg_texts.json"
