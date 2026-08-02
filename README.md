@@ -42,6 +42,8 @@ Afterwards open `http://<pi-ip>/` — done. Recommended first step: set up 2FA o
 
 The installer asks to download the **official Hoval datapoint list** (xlsx) from hoval.com — it is **not** included in this repository for copyright reasons. Two small generators (`tools/gen_registers.py`, `tools/gen_reg_texts.py`) build `registers.json` (register map) and `reg_texts.json` (names + descriptions DE/EN) from it locally.
 
+> **Note on datapoint-list versions & controller firmware:** Hoval extends the datapoint list over time (tested up to **V2-11-12 / rev. ≥2.38**, which added e.g. *room setpoint cooling* and refrigerant-circuit diagnostics). HoxPi accepts any list version — datapoints your controller firmware does not know simply never answer on the CAN bus and stay empty. That is expected, not an error. Rule of thumb: the newer your TopTronic E controller firmware, the more of the new datapoints will respond.
+
 ## Security notes
 
 - **Two-factor authentication (TOTP)**: on the dashboard's *Security* page you can protect all write actions (register permissions, network/IP config, statistics toggle) with any authenticator app (Google/Microsoft Authenticator, Aegis, 1Password …) — scan the QR code, done. Sign-in lasts 30 days per browser; reading stays open. Strongly recommended before exposing the dashboard to a shared network
@@ -92,6 +94,8 @@ sudo bash install.sh
 ```
 
 Der Installer fragt nach der **offiziellen Hoval-Datenpunktliste** (xlsx) von hoval.com — sie ist aus Urheberrechtsgründen **nicht** im Repo enthalten. Zwei Generatoren (`tools/`) erzeugen daraus lokal `registers.json` und `reg_texts.json` (Namen + Beschreibungen DE/EN).
+
+> **Hinweis zu Listen-Versionen & Regler-Firmware:** Hoval erweitert die Datenpunktliste laufend (getestet bis **V2-11-12 / Rev. ≥2.38**, neu darin z. B. *Raumsolltemperatur Kühlbetrieb* und Kältekreis-Diagnose). HoxPi kommt mit jeder Listenversion klar — Datenpunkte, die deine Regler-Firmware nicht kennt, antworten am CAN einfach nie und bleiben leer. Das ist normal, kein Fehler. Faustregel: je neuer die TopTronic-E-Regler-Firmware, desto mehr der neuen Datenpunkte antworten.
 
 ## Sicherheit
 

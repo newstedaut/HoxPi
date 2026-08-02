@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 """Erzeugt registers.json aus der offiziellen Hoval-Modbus-Datenpunktliste (xlsx).
 
-Die xlsx wird NICHT mitgeliefert (Urheberrecht Hoval AG). Download:
-  https://www.hoval.com/misc/TTE/TTE-GW-Modbus-datapoints.xlsx
-(Link steht auch in der Montageanleitung des Hoval Modbus-Gateways, Seite 14.)
+Die xlsx wird NICHT mitgeliefert (Urheberrecht Hoval AG). Download (aktuell):
+  https://cdn.hoval.com/toptronice-gateway-modbus-datapoints_hybris_original.xlsx
+  (alternativ: https://www.hoval.com/misc/TTE/TTE-GW-Modbus-datapoints.xlsx bzw.
+   Hoval-Blog "Modbus-Integration", Bereich Downloads.)
+
+Hinweis: Neuere Listen (z. B. V2-11-12 Rev. >=2.38) enthalten zusaetzliche
+Datenpunkte. Kennt die Regler-Firmware einen Datenpunkt nicht, antwortet er
+am CAN einfach nie und bleibt leer - das ist normal, kein Fehler.
 
 Aufruf:
   python3 gen_registers.py <datenpunktliste.xlsx> [unit_ids] [ausgabe.json]
