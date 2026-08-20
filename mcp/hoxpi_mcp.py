@@ -293,26 +293,102 @@ def set_whitelist(reg: int, allow: bool, confirm: bool = False) -> dict:
     os.replace(tmp, p)
     return {"ok": True, "reg": reg, "allow": allow, "anzahl": len(wl)}
 
+# Register, die erfahrungsgemaess von aussen zurueckgesetzt werden.
+# Quelle: systematische Messung 20.08.2026 (schreiben, alle 2 s nachlesen).
+FREMDGESTEUERT = {
+    1478:  "Hoval-Bedienteil (Betriebswahl Heizkreis 1) - Rueckschreiben nach ca. 6-8 s",
+    23622: "Hoval-Bedienteil (Betriebswahl Lueftung)",
+    23626: "Hoval-Bedienteil (Feuchte-Sollwert)",
+    1510:  "zyklischer Schreiber (Loxone: Raumtemperatur-Einspeisung HK1)",
+    27509: "zyklischer Schreiber (Loxone: SG-Offset Warmwasser)",
+    27528: "zyklischer Schreiber (Loxone: SG-Offset Raum Heizen HK1)",
+    27531: "zyklischer Schreiber (Loxone: SG-Offset Raum Kuehlen KK1)",
+    29435: "zyklischer Schreiber (Loxone: Vorlaufminimaltemp. Kuehlen)",
+    29436: "zyklischer Schreiber (Loxone: Vorlaufminimaltemp. Kuehlen)",
+    23623: "zyklischer Schreiber (Loxone: Lueftungsmodulation)",
+}
+
+_write_checks = {}   # reg -> Ergebnis der Hintergrundpruefung
+
+
+def _verify_later(reg, value, delay=15):
+    """Prueft im Hintergrund, ob ein geschriebener Wert stehen bleibt."""
+    def run():
+        _time.sleep(delay)
+        try:
+            spaeter = read_register(reg).get("rohwert")
+        except Exception as e:                      # pragma: no cover
+            _write_checks[reg] = {"reg": reg, "fehler": str(e)}
+            return
+        _write_checks[reg] = {
+            "reg": reg, "geschrieben": value, "rohwert_nach_%ds" % delay: spaeter,
+            "haelt": spaeter == value,
+            "geprueft_um": _time.strftime("%H:%M:%S"),
+            "hinweis": ("Wert haelt." if spaeter == value else
+                        "FREMDGESTEUERT: Wert wurde auf %s zurueckgesetzt. %s"
+                        % (spaeter, FREMDGESTEUERT.get(reg, "Ursache: Bedienteil oder ein "
+                           "zyklischer Schreiber (Loxone/HA).")))}
+    threading.Thread(target=run, daemon=True).start()
+
+
 @mcp.tool()
 def write_register(reg: int, value: int, confirm: bool = False) -> dict:
     """Rohwert in ein Register schreiben (z. B. 45.0 °C = 450 bei dec1!).
     Erfordert enable_write UND confirm=True UND Register in Whitelist.
-    Die Bridge prüft zusätzlich Wertebereich, Rate-Limit und Kalt-Cache."""
+    Die Bridge prueft zusaetzlich Wertebereich, Rate-Limit und Kalt-Cache.
+
+    ACHTUNG: Ein Lesen direkt nach dem Schreiben beweist NICHT, dass der Wert
+    bleibt. Manche Register werden vom Hoval-Bedienteil oder von einem zyklischen
+    Schreiber (Loxone/HA) nach 6-10 s zurueckgesetzt. Dieses Tool startet deshalb
+    eine Hintergrundpruefung; das Ergebnis nach ca. 15 s mit `schreib_pruefung(reg)`
+    abholen."""
     if not _config().get("enable_write"):
         return {"fehler": "Schreiben via MCP ist deaktiviert (config.json: enable_write)"}
     info = read_register(reg)
     if not confirm:
         return {"fehler": "Sicherheitsabfrage: mit confirm=True bestätigen",
                 "vorschau": {"reg": reg, "name": info.get("name_de"),
-                             "aktueller_rohwert": info.get("rohwert"), "neuer_rohwert": value}}
+                             "aktueller_rohwert": info.get("rohwert"), "neuer_rohwert": value,
+                             "warnung": FREMDGESTEUERT.get(reg)}}
     if reg not in _whitelist():
         return {"fehler": "Register nicht in der Schreib-Whitelist (erst freigeben)"}
+    vorher = info.get("rohwert")
     ok = _wr(reg, value)
     _time.sleep(1)
-    nach = read_register(reg)
-    return {"ok": ok, "reg": reg, "geschrieben": value,
-            "rohwert_nachher": nach.get("rohwert"),
-            "hinweis": "Bridge kann Writes still ablehnen (Range/Rate/Cache) - Rohwert nachher prüfen"}
+    sofort = read_register(reg).get("rohwert")
+
+    res = {"ok": ok, "reg": reg, "name": info.get("name_de"),
+           "rohwert_vorher": vorher, "geschrieben": value, "rohwert_sofort": sofort}
+
+    if not ok or sofort != value:
+        res["haelt"] = False
+        res["hinweis"] = ("Schreiben von der Bridge abgelehnt oder sofort verworfen "
+                          "(Wertebereich, Rate-Limit oder Kalt-Cache-Schutz).")
+        return res
+
+    _write_checks.pop(reg, None)
+    _verify_later(reg, value)
+    res["haelt"] = None
+    res["persistenz"] = "wird geprueft - in ca. 15 s schreib_pruefung(%d) aufrufen" % reg
+    if reg in FREMDGESTEUERT:
+        res["warnung"] = ("Dieses Register ist als fremdgesteuert bekannt: %s. "
+                          "Der Wert wird sehr wahrscheinlich NICHT bleiben."
+                          % FREMDGESTEUERT[reg])
+    return res
+
+
+@mcp.tool()
+def schreib_pruefung(reg: int = 0) -> dict:
+    """Ergebnis der Persistenzpruefung nach einem write_register abholen.
+    Ohne Argument werden alle vorliegenden Pruefungen zurueckgegeben.
+    Liegt noch nichts vor, ist die Pruefung noch nicht abgeschlossen (ca. 15 s warten)."""
+    if reg:
+        return _write_checks.get(reg, {
+            "reg": reg,
+            "status": "noch kein Ergebnis - Pruefung laeuft (ca. 15 s nach dem Schreiben) "
+                      "oder es wurde nichts auf dieses Register geschrieben"})
+    return {"pruefungen": list(_write_checks.values()),
+            "bekannt_fremdgesteuert": FREMDGESTEUERT}
 
 @mcp.tool()
 def about() -> dict:
