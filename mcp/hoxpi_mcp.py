@@ -378,6 +378,78 @@ def write_register(reg: int, value: int, confirm: bool = False) -> dict:
 
 
 @mcp.tool()
+def schreiblast(minuten: int = 30, reg: int = 0) -> dict:
+    """Wer beschreibt die Anlage, wie oft und mit welchem Wert?
+
+    Wertet das Bridge-Protokoll aus (jeder Schreibvorgang wird dort mit Register,
+    Name und Rohwert geloggt) und liefert eine Rangliste nach Haeufigkeit plus den
+    ermittelten Wiederholtakt je Register.
+
+    Damit laesst sich in Sekunden klaeren, warum ein geschriebener Wert nicht
+    stehen bleibt: Meist schreibt ein zyklischer Aktor in Loxone oder Home
+    Assistant denselben Datenpunkt im Sekundentakt zurueck. Ein Register, das hier
+    auftaucht, ist per Modbus nicht dauerhaft von aussen setzbar, solange der
+    Verursacher nicht abgestellt oder sein Wiederholintervall verlaengert wird.
+
+    minuten: betrachteter Zeitraum (Default 30)
+    reg:     optional auf ein einzelnes Register einschraenken
+    """
+    try:
+        out = subprocess.run(
+            ["journalctl", "-u", "hoval-bridge", "--since", "-%d min" % minuten,
+             "--no-pager", "-o", "short-iso"],
+            capture_output=True, text=True, timeout=30).stdout
+    except Exception as e:
+        return {"fehler": "Protokoll nicht lesbar: %s" % e}
+
+    import re
+    muster = re.compile(r"^(\S+).*SET reg (\d+) \((.*?)\) <- (-?\d+)")
+    treffer = {}
+    for zeile in out.splitlines():
+        m = muster.search(zeile)
+        if not m:
+            continue
+        zeit, r, name, wert = m.group(1), int(m.group(2)), m.group(3), int(m.group(4))
+        if reg and r != reg:
+            continue
+        e = treffer.setdefault(r, {"reg": r, "name": name, "anzahl": 0,
+                                   "werte": {}, "zeiten": []})
+        e["anzahl"] += 1
+        e["werte"][wert] = e["werte"].get(wert, 0) + 1
+        e["zeiten"].append(zeit)
+
+    liste = []
+    for e in treffer.values():
+        z = e.pop("zeiten")
+        takt = None
+        if len(z) > 2:
+            try:
+                from datetime import datetime
+                ts = [datetime.fromisoformat(x.replace("Z", "+00:00")) for x in z]
+                d = [(ts[i+1]-ts[i]).total_seconds() for i in range(len(ts)-1)]
+                d = sorted(x for x in d if x > 0)
+                if d:
+                    takt = round(d[len(d)//2], 1)   # Median
+            except Exception:
+                pass
+        e["takt_sekunden"] = takt
+        e["name_de"] = _name(e["reg"]) or e["name"]
+        liste.append(e)
+    liste.sort(key=lambda x: -x["anzahl"])
+
+    gesamt = sum(e["anzahl"] for e in liste)
+    return {
+        "zeitraum_minuten": minuten,
+        "schreibvorgaenge_gesamt": gesamt,
+        "pro_minute": round(gesamt / minuten, 1) if minuten else None,
+        "register": liste,
+        "hinweis": ("Register in dieser Liste werden zyklisch von aussen (Loxone/HA) "
+                    "beschrieben und lassen sich per Modbus nicht dauerhaft aendern, "
+                    "solange der Verursacher aktiv ist. Leere Liste = niemand schreibt."),
+    }
+
+
+@mcp.tool()
 def schreib_pruefung(reg: int = 0) -> dict:
     """Ergebnis der Persistenzpruefung nach einem write_register abholen.
     Ohne Argument werden alle vorliegenden Pruefungen zurueckgegeben.
