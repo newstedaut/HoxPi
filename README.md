@@ -35,6 +35,10 @@ Live dashboard on the Pi (port 80) — no cloud, German/English:
 |---|---|
 | ![Integration](docs/screenshots/integration.jpg) | ![Features](docs/screenshots/funktionen.jpg) |
 
+| Commissioning wizard (live on the Pi) | |
+|---|---|
+| ![Wizard](docs/screenshots/assistent.jpg) | |
+
 ## Hardware
 
 | Part | Note |
@@ -132,6 +136,10 @@ Das Dashboard läuft direkt am Pi (Port 80) — ohne Cloud, Deutsch/Englisch ums
 | Integration Loxone / Home Assistant | Funktionen ein-/ausschalten & 2FA |
 |---|---|
 | ![Integration](docs/screenshots/integration.jpg) | ![Funktionen](docs/screenshots/funktionen.jpg) |
+
+| Inbetriebnahme-Assistent (live am Pi) | |
+|---|---|
+| ![Assistent](docs/screenshots/assistent.jpg) | |
 
 ## Installation
 
