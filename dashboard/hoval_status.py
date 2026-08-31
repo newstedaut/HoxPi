@@ -685,6 +685,8 @@ class H(http.server.BaseHTTPRequestHandler):
             self.api_stats(); return
         if pr.path == "/api/network":
             self.api_network(); return
+        if pr.path == "/api/feature":
+            self.api_feature(); return
         if pr.path != "/api/whitelist":
             self.send_response(404); self.end_headers(); return
         try:
@@ -801,7 +803,8 @@ function tgl(cb,reg){
 </div></div>
 
 <div class="domain"><div class="dh" style="background:#41bdf5;background-image:linear-gradient(90deg,rgba(255,255,255,.18),rgba(255,255,255,0))"><span class="ic">\U0001F3E0</span><h2>Home Assistant</h2></div><div class="dbody">
-<p>{L("Fertige Konfiguration herunterladen \u2013 alle Sensoren erscheinen automatisch, bereits richtig skaliert (\u00b0C, %, kW \u2026).","Download the ready-made configuration \u2013 all sensors appear automatically, already scaled (\u00b0C, %, kW \u2026).")}</p>
+<p><b>{L("Empfohlen: MQTT-Auto-Discovery.","Recommended: MQTT auto-discovery.")}</b> {L("HoxPi ver\u00f6ffentlicht alle Werte <b>und die Steuerung</b> selbst per MQTT. Ist in Home Assistant die <b>MQTT-Integration</b> mit demselben Broker verbunden, erscheinen <b>alle Entit\u00e4ten automatisch</b> unter dem Ger\u00e4t \u201eHoxPi W\u00e4rmepumpe\u201c \u2013 inkl. Reglern und einem St\u00f6rungs-Sensor. Nichts abtippen. Ein-/ausschaltbar auf der Seite <b>Sicherheit</b> (Funktionen).","HoxPi publishes all values <b>and controls</b> via MQTT itself. With the <b>MQTT integration</b> connected to the same broker, <b>all entities appear automatically</b> under the \u201eHoxPi W\u00e4rmepumpe\u201c device \u2013 including controls and a fault sensor. Toggle on the <b>Security</b> page (Functions).")}</p>
+<p style="margin-top:.9rem"><b>{L("Alternativ: Modbus-YAML","Alternative: Modbus YAML")}</b> {L("(nur lesend, ohne MQTT) \u2013 fertige Konfiguration herunterladen, alle Sensoren erscheinen automatisch, bereits skaliert (\u00b0C, %, kW \u2026).","(read-only, without MQTT) \u2013 download the ready-made configuration, all sensors appear automatically, already scaled (\u00b0C, %, kW \u2026).")}</p>
 <div style="text-align:center;margin:1rem 0">
  <a href="/hoxpi-ha.yaml" download style="display:inline-block;background:#41bdf5;color:#08334a;font-weight:700;padding:.7rem 1.4rem;border-radius:11px;text-decoration:none">\u2B07 hoxpi.yaml</a></div>
 <ol style="line-height:1.8;color:#3a4554">
@@ -813,7 +816,7 @@ function tgl(cb,reg){
 <div class="note warn">{L("Andere Pi-IP? Dann in der Datei den <code>host:</code> anpassen.","Different Pi IP? Adjust <code>host:</code> in the file.")}</div>
 </div></div>
 
-<div class="note ok" style="margin-top:1rem">{L("Alle 514 Register mit deutscher Bezeichnung, Beschreibung und Live-Wert findest du auf der Seite <b>Register</b>.","All 514 registers with name, description and live value are on the <b>Registers</b> page.")}</div>"""
+<div class="note ok" style="margin-top:1rem">{L("Alle 555 Register mit deutscher Bezeichnung, Beschreibung und Live-Wert findest du auf der Seite <b>Register</b>.","All 555 registers with name, description and live value are on the <b>Registers</b> page.")}</div>"""
 
     def api_network(self):
         import subprocess, re as _re, threading as _th
@@ -930,6 +933,151 @@ function stoggle(on){
 }
 </script>"""
           + '</div></div>')
+
+    # ---------- Feature-Schalter ----------
+    FEATURES_F = "/home/admin/hoxpi-features.json"
+    FEAT_META = [
+        ("watch","🚨",L("Störungs-Wächter & Takt-Alarm","Fault watch & cycle alarm"),
+         L("Meldet Störungen (Fehlercode, Hoch-/Niederdruck, Inverter), Warmwasser-Ausfall und Verdichter-Kurztakten sofort an Home Assistant, Logdatei und optional Webhook.",
+           "Reports faults (error code, high/low pressure, inverter), hot-water failure and compressor short-cycling instantly to Home Assistant, a log file and an optional webhook."),False),
+        ("mqtt_ha","🏠",L("Home Assistant (MQTT)","Home Assistant (MQTT)"),
+         L("Stellt alle Werte + Steuerung automatisch in Home Assistant bereit (MQTT-Auto-Discovery). Ausschalten, wenn du kein Home Assistant nutzt.",
+           "Publishes all values + controls to Home Assistant automatically (MQTT auto-discovery). Turn off if you don't use Home Assistant."),False),
+        ("cop_filter","📈",L("COP-Plausibilitätsfilter","COP plausibility filter"),
+         L("Verwirft unplausible COP-Ausreißer (Auslese-Artefakte) in Statistik und Home Assistant.",
+           "Discards implausible COP outliers (read artifacts) in statistics and Home Assistant."),False),
+        ("backup","💾",L("Automatisches Backup","Automatic backup"),
+         L("Sichert nächtlich alle Skripte & Configs versioniert (die letzten 14 Stände).",
+           "Backs up all scripts & configs nightly, versioned (last 14)."),False),
+        ("keepalive","⚙️",L("Bus-Ansteuerung (Keepalive)","Bus control (keepalive)"),
+         L("Hält Regelstrategie 3 und die bus-getriebene Konstantanforderung (Eingänge 30-046/057/066 = AUS). Nötig für die relais-freie Heiz-/Kühlsteuerung über Loxone.",
+           "Keeps control strategy 3 and the bus-driven constant demand (inputs 30-046/057/066 = OFF). Required for relay-free heating/cooling control via Loxone."),True),
+    ]
+    def api_feature(self):
+        import os as _o
+        try:
+            body = self._read_json()
+            key = str(body.get("key","")); on = bool(body.get("on")); conf = bool(body.get("confirm"))
+            dp = str(body.get("dp",""))
+            if dp:
+                # Einzel-Datenpunkt des Keepalive umschalten
+                try:
+                    with open(self.FEATURES_F, encoding="utf-8") as f: d = json.load(f)
+                except Exception: d = {}
+                kd = d.setdefault("keepalive_dps", {})
+                if dp not in kd:
+                    out = {"ok": False, "fehler": "unbekannter Datenpunkt"}
+                elif dp != "3032" and not on and not conf:
+                    out = {"ok": False, "fehler": "Bestätigung nötig"}
+                else:
+                    kd[dp]["enabled"] = on
+                    tmp = self.FEATURES_F + ".tmp"
+                    with open(tmp, "w", encoding="utf-8") as f: json.dump(d, f, indent=1, ensure_ascii=False)
+                    _o.replace(tmp, self.FEATURES_F)
+                    out = {"ok": True, "dp": dp, "on": on}
+                self.json_out(out); return
+            crit = {k:c for k,_i,_t,_d,c in self.FEAT_META}
+            if key not in crit:
+                out = {"ok": False, "fehler": "unbekanntes Feature"}
+            elif crit[key] and not on and not conf:
+                out = {"ok": False, "fehler": "Bestätigung nötig"}
+            else:
+                try:
+                    with open(self.FEATURES_F, encoding="utf-8") as f: d = json.load(f)
+                except Exception: d = {}
+                d.setdefault(key, {})["enabled"] = on
+                tmp = self.FEATURES_F + ".tmp"
+                with open(tmp, "w", encoding="utf-8") as f: json.dump(d, f, indent=1)
+                _o.replace(tmp, self.FEATURES_F)
+                out = {"ok": True, "key": key, "on": on}
+        except Exception as e:
+            out = {"ok": False, "fehler": str(e)}
+        self.json_out(out)
+
+    def feature_section(self):
+        import os as _o, subprocess
+        try:
+            with open(self.FEATURES_F, encoding="utf-8") as f: feats = json.load(f)
+        except Exception: feats = {}
+        def stat(key):
+            try:
+                if key == "watch":
+                    try: st = json.load(open("/home/admin/hoval-watch/state.json"))
+                    except Exception: st = {}
+                    n = len(st.get("active", []))
+                    return (L("aktiver Alarm!","active alarm!") if n else L("keine Alarme","no alarms")), (n>0)
+                if key == "mqtt_ha":
+                    a = subprocess.run(["systemctl","is-active","hoval-mqtt"],capture_output=True,text=True,timeout=4).stdout.strip()=="active"
+                    return (L("Dienst läuft","service running") if a else L("Dienst gestoppt","service stopped")), False
+                if key == "backup":
+                    d="/home/admin/hoxpi-backups"; fs=[x for x in _o.listdir(d) if x.endswith(".tar.gz")] if _o.path.isdir(d) else []
+                    if fs:
+                        t=datetime.datetime.fromtimestamp(max(_o.path.getmtime(_o.path.join(d,x)) for x in fs))
+                        return f"{L('letztes','last')}: {t:%d.%m. %H:%M} · {len(fs)}", False
+                    return L("noch kein Backup","no backup yet"), False
+            except Exception: pass
+            return "", False
+        rows=[]
+        for key,icon,title,desc,crit in self.FEAT_META:
+            on = bool(feats.get(key, {}).get("enabled", True))
+            sline, alarm = stat(key)
+            pill_bg = "#fdeaea" if alarm else ("#eafaf1" if on else "#f0f1f4")
+            pill_co = "#d6202f" if alarm else ("#0a8f4f" if on else "#8893a2")
+            pill_tx = (L("Alarm","alarm") if alarm else (L("an","on") if on else L("aus","off")))
+            btn_bg = "#6c7787" if on else "#0a8f4f"
+            btn_tx = (L("Ausschalten","Turn off") if on else L("Einschalten","Turn on"))
+            crit_note = ('<div class="note warn" style="margin-top:.4rem">⚠️ '
+                         + L("Sicherheitsrelevant – hält die bus-getriebene Steuerung. Abschalten nur für Tests, sonst kann Heizen/Kühlen ausfallen.",
+                             "Safety-relevant – keeps the bus-driven control. Turn off only for tests, otherwise heating/cooling may fail.")
+                         + '</div>') if (crit and on) else ""
+            rows.append(
+                '<div style="display:flex;align-items:flex-start;gap:1rem;padding:.85rem 0;border-bottom:1px solid #eceff3">'
+                '<div style="flex:1"><div style="font-weight:700;color:#1c2531">' + icon + ' ' + html.escape(title)
+                + ' <span class="pill" style="background:' + pill_bg + ';color:' + pill_co + ';border-color:' + pill_bg + '">' + pill_tx + '</span></div>'
+                '<div style="color:#5a6675;font-size:.9rem;margin-top:.2rem;line-height:1.5">' + html.escape(desc) + '</div>'
+                + ('<div style="color:#8893a2;font-size:.82rem;margin-top:.3rem">' + html.escape(sline) + '</div>' if sline else '')
+                + crit_note +
+                '</div>'
+                '<button onclick="ftoggle(\'' + key + '\',' + ('false' if on else 'true') + ',' + ('true' if crit else 'false') + ')" '
+                'style="background:' + btn_bg + ';color:#fff;border:0;border-radius:9px;padding:.55rem 1.1rem;font-weight:700;cursor:pointer;min-width:96px">'
+                + btn_tx + '</button></div>')
+            if key == "keepalive" and on:
+                kd = feats.get("keepalive_dps", {})
+                subs = []
+                for dpk in ("30046", "30057", "30066", "3032"):
+                    cd = kd.get(dpk, {}); don = bool(cd.get("enabled", True))
+                    lbl = cd.get("label", "dp" + dpk); crit_dp = dpk != "3032"
+                    subs.append(
+                        '<div style="display:flex;align-items:center;gap:.6rem;padding:.35rem 0;border-bottom:1px dashed #eee">'
+                        '<code style="color:#c2185b">' + dpk + '</code>'
+                        '<span style="flex:1;color:#5a6675;font-size:.85rem">' + html.escape(lbl) + '</span>'
+                        '<span class="pill" style="background:' + ("#eafaf1" if don else "#f0f1f4") + ';color:' + ("#0a8f4f" if don else "#8893a2") + '">' + (L("an","on") if don else L("aus","off")) + '</span>'
+                        '<button onclick="fdp(\'' + dpk + '\',' + ('false' if don else 'true') + ',' + ('true' if crit_dp else 'false') + ')" '
+                        'style="background:' + ("#6c7787" if don else "#0a8f4f") + ';color:#fff;border:0;border-radius:8px;padding:.35rem .8rem;font-size:.82rem;font-weight:700;cursor:pointer;min-width:64px">'
+                        + (L("aus","off") if don else L("an","on")) + '</button></div>')
+                rows.append(
+                    '<div style="margin:-.2rem 0 .5rem 1rem;padding:.5rem .8rem;background:#faf7f9;border:1px solid #f0e3ec;border-radius:9px">'
+                    '<div style="font-size:.8rem;color:#8893a2;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-bottom:.3rem">'
+                    + L("Einzelne Eingänge (Datenpunkte)","Individual inputs (datapoints)") + '</div>' + "".join(subs) + '</div>')
+        js = """<script>
+function fdp(dp,on,crit){
+ if(crit&&!on&&!confirm('Eingang '+dp+' abschalten?\\n\\nDieser Eingang hält die bus-getriebene Steuerung. Abschalten nur für Tests – sonst kann Heizen/Kühlen ausfallen.'))return;
+ fetch('/api/feature',{method:'POST',body:JSON.stringify({key:'keepalive',dp:dp,on:on,confirm:true})}).then(function(r){return r.json();}).then(function(j){
+  if(j.ok){location.reload();}else{alert('Fehler: '+j.fehler);}
+ }).catch(function(e){alert('Fehler: '+e);});
+}
+function ftoggle(key,on,crit){
+ if(crit&&!on&&!confirm('Keepalive wirklich abschalten?\\n\\nOhne Keepalive driften die bus-getriebenen Einstellungen evtl. weg – die relais-freie Heiz-/Kühlsteuerung kann ausfallen. Nur für Tests!'))return;
+ fetch('/api/feature',{method:'POST',body:JSON.stringify({key:key,on:on,confirm:true})}).then(function(r){return r.json();}).then(function(j){
+  if(j.ok){location.reload();}else{alert('Fehler: '+j.fehler);}
+ }).catch(function(e){alert('Fehler: '+e);});
+}
+</script>"""
+        return ('<div class="domain"><div class="dh" style="background:#c2185b;background-image:linear-gradient(90deg,rgba(255,255,255,.15),rgba(255,255,255,0))"><span class="ic">🎛️</span><h2>'
+                + L("Funktionen ein-/ausschalten","Enable / disable functions") + '</h2></div><div class="dbody">'
+                + '<p>' + L("Jede Zusatzfunktion lässt sich hier abschalten. Wirkt sofort (spätestens beim nächsten Prüf-Zyklus des Dienstes).",
+                            "Each optional function can be turned off here. Takes effect immediately (at latest on the service's next check cycle).") + '</p>'
+                + "".join(rows) + js + '</div></div>')
 
     def json_out(self, obj, status=200, cookie=None):
         data = json.dumps(obj).encode()
@@ -1053,6 +1201,7 @@ function apost(url, body, msgid){
                        + ' <input id="ocode" inputmode="numeric" maxlength="6" style="width:90px;padding:.4rem"> '
                        '<button onclick="apost(\'/api/auth/off\',{code:document.getElementById(\'ocode\').value},\'omsg\')" style="background:#6c7787;color:#fff;border:0;border-radius:8px;padding:.5rem 1rem;cursor:pointer">' + L("Deaktivieren", "Disable") + '</button> <span id="omsg" style="color:#d6202f"></span></p>'
                        + '<div class="note warn">' + L("Handy verloren? Auf der Pi <code>sudo rm /home/admin/hoval-bridge/auth.json</code> ausfuehren und den Dashboard-Dienst neu starten - dann ist der Schutz zurueckgesetzt.", "Lost your phone? Run <code>sudo rm /home/admin/hoval-bridge/auth.json</code> on the Pi and restart the dashboard service to reset protection.") + '</div></div></div>')
+        out.append(self.feature_section())
         out.append(js)
         return "".join(out)
 
@@ -1107,7 +1256,7 @@ function apost(url, body, msgid){
 <ul>
 <li><b>Live</b> \u2013 {L("Live-Werte in Klartext, nach Bereichen gruppiert.","live values in plain text, grouped by area.")}</li>
 <li><b>{L("Alle Werte","All values")}</b> \u2013 {L("jeder dekodierte Datenpunkt mit Bezeichnung, Beschreibung (Maus drueber!) und Wert.","every decoded data point with label, description (hover!) and value.")}</li>
-<li><b>Register</b> \u2013 {L("alle 514 Register, sortier- und durchsuchbar, mit Schreibfreigabe per Haken.","all 514 registers, sortable and searchable, with write permission checkboxes.")}</li>
+<li><b>Register</b> \u2013 {L("alle 555 Register, sortier- und durchsuchbar, mit Schreibfreigabe per Haken.","all 555 registers, sortable and searchable, with write permission checkboxes.")}</li>
 <li><b>Integration</b> \u2013 {L("Loxone & Home Assistant anbinden, Netzwerk/IP einstellen, komplette Anleitung.","connect Loxone & Home Assistant, set network/IP, full guide.")}</li>
 </ul>
 <div class="domain"><div class="dh" style="background:#c2185b;background-image:linear-gradient(90deg,rgba(255,255,255,.15),rgba(255,255,255,0))"><span class="ic">\u2764\ufe0f</span><h2>{L("HoxPi unterst\u00fctzen","Support HoxPi")}</h2></div><div class="dbody">

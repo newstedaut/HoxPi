@@ -78,6 +78,7 @@ python3 -m venv ~/hoval-bridge-venv
 sudo apt install -y python3-paho-mqtt
 ```
 Getestete Stände: Debian 13, Python 3.13, python-can 4.6.1, pymodbus 3.6.9, pyserial 3.5.
+> ⚠ **Python 3.12 oder neuer erforderlich** (das Dashboard nutzt moderne f-strings / PEP 701). Raspberry Pi OS „Bookworm" liefert 3.11 — dann Raspberry Pi OS „Trixie" (Debian 13) nehmen oder Python 3.12+ nachinstallieren.
 
 **Programme ablegen** (aus Repo/Backup entpacken). Standard-Ablage:
 | Programm | Pfad | läuft mit |
