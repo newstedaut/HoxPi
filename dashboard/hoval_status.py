@@ -586,6 +586,7 @@ def page(title, active, body, refresh=False, path="/"):
                                 ("alle","/alle",L("Alle Werte","All values")),
                                 ("register","/register",L("Register","Registers")),
                                 ("integration","/integration","Integration"),
+                                ("assistent","/assistent",L("Assistent","Wizard")),
                                 ("sicherheit","/sicherheit",L("Sicherheit","Security")),
                                 ])
     sw = (f'<div class="langsw">'
@@ -659,6 +660,15 @@ class H(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Disposition",'attachment; filename="hoxpi.yaml"')
             self.send_header("Content-Length", str(len(data)))
             self.end_headers(); self.wfile.write(data); return
+        if p == "/assistent":
+            import os as _os
+            for _ap in ("/home/admin/hoval-bridge/hoxpi_assistent.html", "/opt/hoxpi/hoxpi_assistent.html"):
+                if _os.path.exists(_ap):
+                    data = open(_ap, encoding="utf-8").read().encode("utf-8")
+                    self.send_response(200); self.send_header("Content-Type","text/html; charset=utf-8")
+                    self.send_header("Content-Length", str(len(data))); self.end_headers(); self.wfile.write(data); return
+            self.send_response(404); self.send_header("Content-Type","text/plain; charset=utf-8"); self.end_headers()
+            self.wfile.write("hoxpi_assistent.html nicht gefunden (gehoert nach /home/admin/hoval-bridge/)".encode()); return
         if p == "/werte":    body, rf, act = self.werte(), True, "werte"
         elif p == "/alle":   body, rf, act = self.alle(), True, "alle"
         elif p == "/register": body, rf, act = self.register(), False, "register"
@@ -681,6 +691,8 @@ class H(http.server.BaseHTTPRequestHandler):
         if auth_enabled() and not self.session_ok():
             self.json_out({"ok": False, "fehler": "Nicht angemeldet - bitte auf der Seite 'Sicherheit' den 2FA-Code eingeben / Not signed in - enter your 2FA code on the 'Security' page"}, 401)
             return
+        if pr.path == "/api/features/apply":
+            self.api_features_apply(); return
         if pr.path == "/api/stats":
             self.api_stats(); return
         if pr.path == "/api/network":
@@ -953,6 +965,28 @@ function stoggle(on){
          L("Hält Regelstrategie 3 und die bus-getriebene Konstantanforderung (Eingänge 30-046/057/066 = AUS). Nötig für die relais-freie Heiz-/Kühlsteuerung über Loxone.",
            "Keeps control strategy 3 and the bus-driven constant demand (inputs 30-046/057/066 = OFF). Required for relay-free heating/cooling control via Loxone."),True),
     ]
+    def api_features_apply(self):
+        # Komplette hoxpi-features.json vom Inbetriebnahme-Assistenten uebernehmen (2FA-geschuetzt via do_POST-Guard)
+        import os as _o
+        try:
+            body = self._read_json()
+            if not isinstance(body, dict) or not body:
+                self.json_out({"ok": False, "fehler": "leere/ungueltige Konfiguration"}); return
+            allowed = {"watch", "mqtt_ha", "cop_filter", "backup", "keepalive", "keepalive_dps"}
+            bad = [k for k in body if k not in allowed]
+            if bad:
+                self.json_out({"ok": False, "fehler": "unbekannte Schluessel: " + ",".join(bad)}); return
+            try:
+                with open(self.FEATURES_F, encoding="utf-8") as f: cur = json.load(f)
+            except Exception: cur = {}
+            cur.update(body)
+            tmp = self.FEATURES_F + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f: json.dump(cur, f, indent=1, ensure_ascii=False)
+            _o.replace(tmp, self.FEATURES_F)
+            self.json_out({"ok": True})
+        except Exception as e:
+            self.json_out({"ok": False, "fehler": str(e)}, 500)
+
     def api_feature(self):
         import os as _o
         try:

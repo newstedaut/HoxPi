@@ -227,19 +227,35 @@ function buildSummary(){
  var conf={};for(var k in feats)conf[k]=feats[k];
  var json=JSON.stringify(conf,null,1);
 
- var html='<div class="ok" style="margin:.6rem 0 1rem">Auf Basis deiner Angaben würde HoxPi so konfiguriert. Nichts davon ist geschrieben — reiner Trockentest.</div>';
+ var LIVE=location.protocol.indexOf('http')===0;
+ var html=LIVE
+  ?'<div class="ok" style="margin:.6rem 0 1rem">Auf Basis deiner Angaben wird HoxPi so konfiguriert. Geschrieben wird erst mit dem Knopf <b>„Auf diesem HoxPi übernehmen"</b> unten.</div>'
+  :'<div class="ok" style="margin:.6rem 0 1rem">Auf Basis deiner Angaben würde HoxPi so konfiguriert. Nichts davon ist geschrieben — reiner Trockentest.</div>';
  html+='<table>'+rows+'</table>';
  html+='<h2>Kanal-Exklusion (Register-Paare)</h2><p style="color:#5a6675;font-size:.92rem;line-height:1.5">'+exText+'</p>';
  html+='<h2>Was HoxPi tun würde</h2><ul style="line-height:1.7;color:#3a4554">'+todo.map(function(t){return '<li>'+t+'</li>';}).join('')+'</ul>';
  html+='<h2>Erzeugte <code>hoxpi-features.json</code></h2><pre id="jsonout">'+json.replace(/</g,'&lt;')+'</pre>';
  html+='<button class="b sec" onclick="copyj()">📋 JSON kopieren</button> <button class="b sec" onclick="location.reload()">↺ Neu starten</button>';
+ if(LIVE){html+=' <button class="b" onclick="applyj()">✅ Auf diesem HoxPi übernehmen</button><span id="applyres" style="margin-left:.6rem;font-weight:600"></span>';}
  html+='<h2>So geht es weiter</h2><ol style="line-height:1.7;color:#3a4554">'
   +'<li><b>HoxPi muss erst existieren</b> — Raspberry Pi, CAN-Adapter, Software. Die vollständige <b>Installationsanleitung</b> (von der leeren SD-Karte bis zum laufenden Dashboard) liegt separat bei: <code>HoxPi_Installation.md</code>.</li>'
   +'<li><b>2FA einrichten</b> (empfohlen, aber optional): Auf der Dashboard-Seite <b>Sicherheit</b> einmalig einen 2FA-Code (Authenticator-App) einrichten. Ohne 2FA ist das Dashboard im Heimnetz trotzdem nur lokal erreichbar.</li>'
-  +'<li><b>Übernehmen:</b> Im echten Dashboard schreibt ein „Übernehmen"-Knopf diese <code>hoxpi-features.json</code> auf den Pi — geschützt durch das 2FA-Login (falls eingerichtet). <b>Im Trockentest hier ist er bewusst aus</b>, damit garantiert nichts geschrieben wird.</li>'
+  +(LIVE
+    ?'<li><b>Übernehmen:</b> Der Knopf oben schreibt die <code>hoxpi-features.json</code> direkt auf diesen HoxPi. Bei aktiver 2FA vorher auf der Seite <b>Sicherheit</b> anmelden.</li>'
+    :'<li><b>Übernehmen:</b> Im echten Dashboard (Seite <b>Assistent</b>) schreibt der Knopf „Auf diesem HoxPi übernehmen" diese <code>hoxpi-features.json</code> auf den Pi — geschützt durch das 2FA-Login (falls eingerichtet). <b>Im Trockentest hier ist er bewusst aus</b>, damit garantiert nichts geschrieben wird.</li>')
   +'</ol>';
  document.getElementById('summary').innerHTML=html;
  window._json=json;
+}
+function applyj(){
+ var el=document.getElementById('applyres');el.style.color='#5a6675';el.textContent='schreibe …';
+ fetch('/api/features/apply',{method:'POST',headers:{'Content-Type':'application/json'},body:window._json||'{}'})
+ .then(function(r){return r.json().then(function(j){return {s:r.status,j:j};});})
+ .then(function(x){
+  if(x.j&&x.j.ok){el.style.color='#1c7c2a';el.textContent='Übernommen ✓ — wirkt spätestens beim nächsten Prüf-Zyklus.';}
+  else if(x.s===401){el.style.color='#c62828';el.innerHTML='Nicht angemeldet — bitte auf der Seite <a href="/sicherheit">Sicherheit</a> den 2FA-Code eingeben und dann erneut übernehmen.';}
+  else{el.style.color='#c62828';el.textContent='Fehler: '+((x.j&&x.j.fehler)||x.s);}
+ }).catch(function(e){el.style.color='#c62828';el.textContent='Netzwerkfehler: '+e;});
 }
 function copyj(){navigator.clipboard.writeText(window._json||'').then(function(){alert('JSON in die Zwischenablage kopiert.');});}
 paint();

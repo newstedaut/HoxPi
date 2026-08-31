@@ -170,9 +170,13 @@ Ohne 2FA funktioniert alles genauso — der Schutz ist dann „nur" das lokale H
 
 ## 8 · Anlage anbinden (Inbetriebnahme-Assistent)
 
-Jetzt kommt der **Inbetriebnahme-Assistent** (`hoxpi_assistent.html`): Er fragt Heizkreise,
-Steuerungsart (relais-frei über Bus / klassisch über Kontakt / nur lesen), Home-Assistant-Nutzung
-und Extras ab und erzeugt die passende **`hoxpi-features.json`**. Reihenfolge:
+Jetzt kommt der **Inbetriebnahme-Assistent** — im Dashboard auf der Seite **Assistent**
+(`http://<pi-ip>/assistent`). Er fragt Heizkreise, Steuerungsart (relais-frei über Bus /
+klassisch über Kontakt / nur lesen), Home-Assistant-Nutzung und Extras ab und erzeugt die
+passende **`hoxpi-features.json`**. Am Ende schreibt der Knopf **„Auf diesem HoxPi übernehmen"**
+die Konfiguration direkt auf den Pi (bei aktiver 2FA nur mit Anmeldung). Die Datei
+`assistant/hoxpi_assistent.html` lässt sich auch offline im Browser öffnen — dann reiner
+Trockentest, es wird nichts geschrieben. Reihenfolge:
 
 1. **Loxone/HA anbinden:** Modbus-TCP-Gerät (IP des Pi, Port 502) anlegen; Hoval-Templates aus
    der Loxone Library laden. Bei Home Assistant genügt die MQTT-Integration (Auto-Discovery).
