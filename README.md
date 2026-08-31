@@ -19,6 +19,22 @@ HoxPi passively reads the CAN bus of a Hoval® TopTronic® E system (heat pump, 
 - **SG-Ready / PV surplus**: full support for Hoval's Smart Grid offset registers (Use Case 8 of the Hoval Modbus guideline)
 - **AI interface (MCP)**: built-in [Model Context Protocol](https://modelcontextprotocol.io) server (`http://<pi-ip>:8808/mcp`) — AI assistants like Claude can inspect the system live, explain values, analyse Prometheus history and diagnose faults in plain language. Add it to **Claude Desktop** via `mcp-remote` in `claude_desktop_config.json` (needs Node.js; exact snippet on the dashboard's *Integration* page — Claude's hosted "custom connectors" require a public https URL, so the local bridge is the way to go on a home network). Writing via MCP is **off by default** (`config.json: enable_write`) and always requires explicit confirmation plus all bridge safeguards
 
+## Screenshots
+
+Live dashboard on the Pi (port 80) — no cloud, German/English:
+
+| Start | Live values |
+|---|---|
+| ![Start](docs/screenshots/start.jpg) | ![Live values](docs/screenshots/live-werte.jpg) |
+
+| All decoded datapoints | Registers & write permissions |
+|---|---|
+| ![All values](docs/screenshots/alle-werte.jpg) | ![Registers](docs/screenshots/register.jpg) |
+
+| Loxone / Home Assistant integration | Feature toggles & 2FA |
+|---|---|
+| ![Integration](docs/screenshots/integration.jpg) | ![Features](docs/screenshots/funktionen.jpg) |
+
 ## Hardware
 
 | Part | Note |
@@ -100,6 +116,22 @@ HoxPi liest den CAN-Bus einer Hoval® TopTronic® E-Anlage (Wärmepumpe, Wohnrau
 - **Automatisches Backup**: nächtliche, versionierte Sicherung aller Skripte & Configs
 - **Funktions-Schalter** (Dashboard → *Sicherheit*): jede Zusatzfunktion einzeln ein-/ausschaltbar (inkl. jedem Keepalive-Eingang), hinter 2FA
 - **Inbetriebnahme-Assistent** (`assistant/hoxpi_assistent.html`): geführtes, browserbasiertes Setup, erzeugt die passende `hoxpi-features.json` (Trockentest, schreibt nichts)
+
+## Screenshots
+
+Das Dashboard läuft direkt am Pi (Port 80) — ohne Cloud, Deutsch/Englisch umschaltbar:
+
+| Startseite | Live-Werte |
+|---|---|
+| ![Start](docs/screenshots/start.jpg) | ![Live-Werte](docs/screenshots/live-werte.jpg) |
+
+| Alle dekodierten Datenpunkte | Register & Schreibfreigaben |
+|---|---|
+| ![Alle Werte](docs/screenshots/alle-werte.jpg) | ![Register](docs/screenshots/register.jpg) |
+
+| Integration Loxone / Home Assistant | Funktionen ein-/ausschalten & 2FA |
+|---|---|
+| ![Integration](docs/screenshots/integration.jpg) | ![Funktionen](docs/screenshots/funktionen.jpg) |
 
 ## Installation
 
