@@ -48,14 +48,29 @@ WRITE_WHITELIST = {
     1561,   # Betriebswahl Waermeerzeuger      0=aus 1=Auto 4=Man.Heizen 5=Man.Kuehlen (LIST)
     1510,   # Raum-Ist HK1 (extern einspeisbar, S16 dec1)
     1511,   # Raum-Ist HK2
-    1512,   # Raum-Ist HK3
-    # --- Erweiterung 03.07.2026: UG-Kuehlung (To-do 8) ---
+    # --- Erweiterung 03.07.2026: UG-Kuehlung & Heizen (Hoval Master Template) ---
+    1490,   # HK1 Konstantanforderung Heizen (dp 7048, dec1, 10-80 C, 0=aus)
+    1491,   # HK2 Konstantanforderung Heizen (dito)
     19482,  # HK1 Konstantanforderung Kuehlen (dp 7047, dec1; 180 = 18.0 C, 0 = aus)
     23755,  # HK2 Konstantanforderung Kuehlen (dito; 0 = Phantom-Anforderung weg)
+    27510,  # Regelstrategie HK1 (0=Witterung, 3=Konstant, 4=Witterung Heizen + Konstant Kuehlen)
+    27511,  # Regelstrategie HK2 (dito)
     27531,  # SG Offset Raum-Soll Kuehlen HK1/UG (dp 7046, dec1, 0-120 = 0-12.0 K) - 04.07.2026
     27532,  # SG Offset Raum-Soll Kuehlen HK2/OG (dito) - 04.07.2026
 }
-WRITE_MIN_INTERVAL = 2.0   # s, Rate-Limit pro Register
+WRITE_MIN_INTERVAL = 0.05   # s, minimales Intervall (verhindert Bus-Flut, laesst Loxone-Befehle sofort durch)
+
+# --- Kanal-Exklusion Heizen/Kuehlen (relais-freier Template-Betrieb) ----------
+# Pro Heizkreis darf nur EIN Sollwert-Register != 0 sein. Schreibt Loxone den
+# einen Kanal (>0), nullt HoxPi automatisch den gepaarten anderen Kanal - so
+# uebernimmt HoxPi in Software die Rolle des Umschaltkontakts (VE3).
+# Paarung Heizen <-> Kuehlen je HK: HC1 1490/19482, HC2 1491/23755, HC3 1492/23756.
+EXCL_PAIRS = {
+    1490: 19482, 19482: 1490,   # HC1
+    1491: 23755, 23755: 1491,   # HC2
+    1492: 23756, 23756: 1492,   # HC3
+}
+EXCL_MIN_INTERVAL = 2.0   # s, Throttle fuer den Partner-Null-Write
 
 # --- Dynamische Whitelist (Dashboard-Checkboxen, 04.07.2026) ------------------
 # whitelist.json wird vom Dashboard (Seite "Register") verwaltet; Aenderungen
@@ -151,13 +166,19 @@ class Bridge:
         self.dec_count = 0
         self.err_count = 0
         self._last_write = {}
-        self._pending = {}   # Mehrfach-Frame-Reassembly: (devkey,seq) -> [bytearray, remaining]
+        self._pending = {}   # Mehrfach-Frame-Reassembly: (devkey,seq) -> [bytearray, remaining, timestamp]
         self._seen_from_can = set()  # Register, die schon mind. 1x vom CAN dekodiert wurden
+        self._send_lock = threading.Lock()
 
     def open_can(self):
         import can
         self.bus = can.Bus(channel=self.args.can, interface="socketcan")
         log.info("CAN offen: %s", self.args.can)
+
+    def send_msg(self, msg):
+        """Thread-sicheres Senden auf SocketCAN."""
+        with self._send_lock:
+            self.bus.send(msg)
 
     # ----- passiv: Frames reassemblieren (Einzel- UND Mehrfach-Frame) + dekodieren -----
     # Protokoll (aus parren/hoval-ultrasource-agent): Arb-Top-Byte = Frame-Typ.
@@ -175,6 +196,13 @@ class Bridge:
         d = bytes(msg.data)
         if not d:
             return
+        now = time.time()
+        # Veraltete unvollständige Reassembly-Puffer aufräumen (verhindert Memory-Leaks bei CAN-Drops)
+        if len(self._pending) > 20:
+            stale = [k for k, v in self._pending.items() if len(v) > 2 and (now - v[2]) > 5.0]
+            for k in stale:
+                self._pending.pop(k, None)
+
         if ftype == 0x1f:
             if len(d) < 2:
                 return
@@ -182,7 +210,7 @@ class Bridge:
             if remaining == 0:
                 self._parse_message(d[1:])
             else:
-                self._pending[(devkey, d[1])] = [bytearray(d[2:]), remaining - 1]
+                self._pending[(devkey, d[1])] = [bytearray(d[2:]), remaining - 1, now]
         elif ftype == 0x00:
             return
         else:
@@ -262,7 +290,7 @@ class Bridge:
                 payload = bytes([0x01, OP_GET, r["fg"] & 0xFF, r["fn"] & 0xFF,
                                  (r["dp"] >> 8) & 0xFF, r["dp"] & 0xFF])
                 try:
-                    self.bus.send(can.Message(arbitration_id=arb,
+                    self.send_msg(can.Message(arbitration_id=arb,
                                               data=payload, is_extended_id=True))
                 except Exception as e:
                     log.debug("poll-send: %s", e)
@@ -315,9 +343,31 @@ class Bridge:
             try:
                 # HomeVent/Lueftung (UnitId 520) hoert auf ARB_HV_POLL auch fuer SET;
                 # WEZ-Schreib-ID (ARB_WRITE) wuerde von der Lueftung ignoriert.
-                self.bus.send(can.Message(arbitration_id=(ARB_HV_POLL if r.get("unit_id")==520 else ARB_WRITE),
+                self.send_msg(can.Message(arbitration_id=(ARB_HV_POLL if r.get("unit_id")==520 else ARB_WRITE),
                                           data=payload, is_extended_id=True))
                 log.info("SET reg %d (%s) <- %s (raw)", reg, r.get("name"), v)
+                # --- Kanal-Exklusion: aktiver Kanal (>0) nullt den Partner-Kanal ---
+                partner = EXCL_PAIRS.get(reg)
+                if partner is not None and chk > 0:
+                    excl_last = getattr(self, "_excl_last", None)
+                    if excl_last is None:
+                        excl_last = self._excl_last = {}
+                    if now - excl_last.get(partner, 0) >= EXCL_MIN_INTERVAL:
+                        pr = self.regmap.by_reg.get(partner)
+                        if pr is not None:
+                            ptyp = (pr.get("type") or "").upper()
+                            pdata = bytes([0]) if ptyp in ("U8", "S8", "LIST") else bytes([0, 0])
+                            ppayload = bytes([0x01, OP_SET, pr["fg"] & 0xFF, pr["fn"] & 0xFF,
+                                              (pr["dp"] >> 8) & 0xFF, pr["dp"] & 0xFF]) + pdata
+                            try:
+                                self.send_msg(can.Message(
+                                    arbitration_id=(ARB_HV_POLL if pr.get("unit_id") == 520 else ARB_WRITE),
+                                    data=ppayload, is_extended_id=True))
+                                excl_last[partner] = now
+                                self._last_write[partner] = now
+                                log.info("EXKLUSION: reg %d aktiv (%s) -> Partner reg %d auf 0", reg, r.get("name"), partner)
+                            except Exception as e:
+                                log.error("exkl-send: %s", e)
             except Exception as e:
                 log.error("set-send: %s", e)
 

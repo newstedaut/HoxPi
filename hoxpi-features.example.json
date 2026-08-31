@@ -1,0 +1,13 @@
+{
+ "watch":      {"enabled": true},
+ "mqtt_ha":    {"enabled": true},
+ "cop_filter": {"enabled": true},
+ "backup":     {"enabled": true},
+ "keepalive":  {"enabled": true},
+ "keepalive_dps": {
+  "30046": {"enabled": true, "value": 0, "label": "Ext. constant demand heating input -> OFF"},
+  "30057": {"enabled": true, "value": 0, "label": "Ext. constant demand cooling input -> OFF"},
+  "30066": {"enabled": true, "value": 0, "label": "Heating/cooling changeover input -> OFF"},
+  "3032":  {"enabled": false, "value": 3, "label": "Control strategy 3 (constant) - redundant if Loxone writes 27510"}
+ }
+}

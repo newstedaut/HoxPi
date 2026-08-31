@@ -198,6 +198,20 @@ def main():
     c = client_new()
     last_wl = whitelist()
     while True:
+        try: _f = json.load(open("/home/admin/hoxpi-features.json"))
+        except Exception: _f = {}
+        if not _f.get("mqtt_ha", {}).get("enabled", True):
+            c.publish(AVAIL, "offline", retain=True)
+            for _k,_r,_n,_u,_dc,_e in SENSORS + [("cop",COP_HI,"",None,None,None)]:
+                c.publish(f"homeassistant/sensor/hoxpi/{_k}/config", "", retain=True)
+            for _k,_r,_n,_a,_e in CONTROLS:
+                c.publish(f"homeassistant/{_a}/hoxpi/{_k}/config", "", retain=True)
+            main._was_off = True
+            time.sleep(INTERVAL); continue
+        else:
+            c.publish(AVAIL, "online", retain=True)
+            if getattr(main, "_was_off", False):
+                discovery(c, whitelist()); main._was_off = False
         wl = whitelist()
         if wl != last_wl:
             discovery(c, wl); last_wl = wl
@@ -215,7 +229,12 @@ def main():
                 pass
         try:
             hl = mb_read(COP_HI, 2)
-            if hl: c.publish(f"{BASE}/cop/state", ((hl[0] << 16) | hl[1]) / 10, retain=True)
+            if hl:
+                _cop = ((hl[0] << 16) | hl[1]) / 10
+                try: _copf = json.load(open("/home/admin/hoxpi-features.json")).get("cop_filter",{}).get("enabled",True)
+                except Exception: _copf = True
+                if (not _copf) or (0 <= _cop <= 20):  # COP-Plausibilitaet
+                    c.publish(f"{BASE}/cop/state", _cop, retain=True)
         except Exception:
             pass
         for key, reg, name, art, enum in CONTROLS:

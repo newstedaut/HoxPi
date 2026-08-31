@@ -1,0 +1,247 @@
+<!doctype html><html lang="de"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HoxPi · Inbetriebnahme-Assistent</title>
+<style>
+:root{color-scheme:light}
+*{box-sizing:border-box}
+body{font-family:'Segoe UI',system-ui,sans-serif;margin:0;background:#eceff3;color:#222b36}
+header{background:#fff;border-bottom:3px solid #e2001a;padding:.8rem 1.3rem;display:flex;align-items:center;gap:1rem;box-shadow:0 1px 6px rgba(0,0,0,.06)}
+.logo{font-weight:800;font-size:1.25rem}.logo .h{color:#e2001a}.logo .o{color:#1c2531}.logo .x{color:#69b41e}.logo .p{color:#c2185b}
+.brand{color:#6c7787;font-weight:500;font-size:.9rem}
+main{max-width:760px;margin:0 auto;padding:1.4rem}
+h1{font-size:1.5rem;color:#1c2531;margin:.2rem 0 .3rem}
+.sub{color:#6c7787;margin:0 0 1.2rem}
+.card{background:#fff;border:1px solid #e6e9ef;border-radius:15px;box-shadow:0 2px 10px rgba(20,30,50,.07);padding:1.3rem 1.4rem;margin-bottom:1.1rem}
+.step{display:none}.step.on{display:block}
+.q{font-size:1.18rem;font-weight:700;color:#1c2531;margin:0 0 .3rem}
+.hint{color:#6c7787;font-size:.92rem;margin:0 0 1rem;line-height:1.55}
+.opts{display:flex;flex-direction:column;gap:.55rem}
+.opt{display:flex;gap:.7rem;align-items:flex-start;border:2px solid #e6ebf1;border-radius:11px;padding:.75rem .9rem;cursor:pointer;transition:.12s;background:#f9fafc}
+.opt:hover{border-color:#f0b8be;background:#fff}
+.opt.sel{border-color:#e2001a;background:#fff;box-shadow:0 2px 8px rgba(226,0,26,.1)}
+.opt input{margin-top:.2rem}
+.opt .t{font-weight:650;color:#1c2531}.opt .d{color:#6c7787;font-size:.88rem;margin-top:.1rem;line-height:1.45}
+.num{display:flex;gap:.5rem;flex-wrap:wrap}
+.num button{border:2px solid #e6ebf1;background:#f9fafc;border-radius:10px;min-width:56px;padding:.6rem;font-size:1.05rem;font-weight:700;cursor:pointer;color:#1c2531}
+.num button.sel{border-color:#e2001a;background:#fff;color:#e2001a}
+.nav{display:flex;justify-content:space-between;margin-top:1.3rem;gap:.6rem}
+button.b{border:0;border-radius:10px;padding:.7rem 1.5rem;font-size:1rem;font-weight:700;cursor:pointer}
+.b.prim{background:#e2001a;color:#fff}.b.prim:disabled{background:#e6a6ac;cursor:not-allowed}
+.b.sec{background:#eef1f5;color:#5a6675}
+.prog{display:flex;gap:.35rem;margin-bottom:1.2rem}
+.prog i{height:5px;border-radius:3px;flex:1;background:#dfe3ea}.prog i.done{background:#e2001a}.prog i.cur{background:#f0808c}
+.warn{background:#fff3e6;border:1px solid #f3cf9e;border-radius:10px;padding:.7rem .9rem;color:#8a5a1e;font-size:.9rem;margin-top:.9rem;line-height:1.5}
+.ok{background:#eafaf1;border:1px solid #bce7cd;border-radius:10px;padding:.7rem .9rem;color:#1c6b3f;font-size:.9rem;line-height:1.5}
+table{border-collapse:collapse;width:100%;font-size:.9rem;margin:.5rem 0}
+th,td{border-bottom:1px solid #eceff3;padding:.4rem .55rem;text-align:left}th{color:#7a8694;background:#f7f9fc}
+td code{color:#c2185b;font-weight:600}
+pre{background:#1c2531;color:#e6e9ef;border-radius:10px;padding:.9rem 1rem;overflow:auto;font-size:.83rem;line-height:1.5}
+.pill{display:inline-block;border-radius:6px;padding:.05rem .5rem;font-size:.78rem;font-weight:700}
+.pon{background:#eafaf1;color:#0a8f4f}.poff{background:#f0f1f4;color:#8893a2}
+.dry{background:#eef6ff;border:1px solid #cfe2f7;border-radius:10px;padding:.6rem .9rem;color:#2b5378;font-size:.88rem;margin-bottom:1rem}
+footer{color:#9aa3af;font-size:.8rem;text-align:center;padding:1.6rem}
+h2{font-size:1.15rem;color:#e2001a;margin:1.4rem 0 .4rem}
+</style></head><body>
+<header><span class="logo"><span class="h">H</span><span class="o">o</span><span class="x">x</span><span class="p">P</span>i</span>
+<span class="brand">Inbetriebnahme-Assistent · für Hoval® TopTronic® E</span></header>
+<main>
+<h1>Inbetriebnahme-Assistent</h1>
+<p class="sub">In wenigen Schritten die passende HoxPi-Konfiguration erzeugen — für deine Anlage.</p>
+<div class="dry">🧪 <b>Trockentest:</b> Dieser Assistent läuft komplett im Browser und schreibt <b>nichts</b> auf die Anlage. Am Ende bekommst du die fertige Konfiguration zum Ansehen/Kopieren.</div>
+
+<div class="prog" id="prog"></div>
+
+<div class="card">
+ <!-- Schritt 1: Heizkreise -->
+ <div class="step" data-s="0">
+  <p class="q">Wie viele Heizkreise hat deine Anlage?</p>
+  <p class="hint">Jeder Heizkreis (z. B. Fußboden UG, Decke OG) hat eigene Vorlauf-Sollwert-Register. HoxPi überwacht die Kanal-Exklusion für jeden.</p>
+  <div class="num" data-k="hk">
+   <button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button></div>
+ </div>
+ <!-- Schritt 2: Steuerung Heizen/Kühlen -->
+ <div class="step" data-s="1">
+  <p class="q">Wie soll Heizen/Kühlen umgeschaltet werden?</p>
+  <p class="hint">Bestimmt, ob HoxPi die Eingangszuordnungen (30-046/057/066) auf „AUS" hält, damit das Original-Hoval-Template ohne Draht­brücke/Relais läuft.</p>
+  <div class="opts" data-k="mode">
+   <label class="opt"><input type="radio" name="mode" value="busfree"><span><span class="t">Relais-frei über den Bus (empfohlen)</span><span class="d">Loxone/BMS schreibt die Sollwerte (1490/19482 …), HoxPi hält die Eingänge auf AUS. Keine Brücke, kein Relais. So läuft die Referenz-Anlage.</span></span></label>
+   <label class="opt"><input type="radio" name="mode" value="contact"><span><span class="t">Klassisch über Kontakt/Brücke</span><span class="d">Ein physischer Kontakt (VE3-FE1) schaltet Heizen/Kühlen. Dann muss HoxPi die Eingänge NICHT auf AUS halten (Standard-Hoval-Verkabelung).</span></span></label>
+   <label class="opt"><input type="radio" name="mode" value="readonly"><span><span class="t">Nur mitlesen (keine Steuerung)</span><span class="d">HoxPi liest nur Werte aus, schreibt gar nichts. Für reines Monitoring.</span></span></label>
+  </div>
+ </div>
+ <!-- Schritt 3: bedingt — Persistenz (busfree) ODER Kontakt (classic) -->
+ <div class="step" data-s="2">
+  <div id="p-persist">
+   <p class="q">Halten die Eingangs-Zuordnungen (30-xxx) von selbst?</p>
+   <p class="hint">Auf manchen Anlagen sind die 30-xxx flüchtig (z. B. bei ungleichem Software-Stand von Bedienteil und Regler) und müssen zyklisch nachgeschrieben werden. Unsicher? → „Sicherheitshalber nachschreiben".</p>
+   <div class="opts" data-k="persist">
+    <label class="opt"><input type="radio" name="persist" value="yes"><span><span class="t">Sicherheitshalber nachschreiben (empfohlen)</span><span class="d">HoxPi hält 30-046/057/066 alle 5 Min nach. Funktioniert immer, auch bei SW-Mismatch.</span></span></label>
+    <label class="opt"><input type="radio" name="persist" value="no"><span><span class="t">Nein, sie halten (kein Nachschreiben)</span><span class="d">Nur wählen, wenn du sicher weißt, dass die 30-xxx auf deiner Anlage persistent sind. Keepalive-Eingänge bleiben dann aus.</span></span></label>
+   </div>
+   <div class="warn">ℹ️ <b>Software-Stände:</b> Getestet & garantiert relais-frei mit <b>Bedienmodul ab 2.19</b> und <b>WEZ-Regelung ab 2.15</b>. Sind Bedienmodul und Regler auf <b>ungleichem</b> Stand, sind die 30-xxx erfahrungsgemäß <b>flüchtig</b> → „nachschreiben" wählen. Bei sauber abgeglichenen Ständen können sie halten (dann optional „nein"). Stand ablesen: Bedienteil → Info → Software.</div>
+  </div>
+  <div id="p-contact" style="display:none">
+   <p class="q">Über welchen Kontakt läuft die Heizen/Kühlen-Umschaltung?</p>
+   <p class="hint">Bei der klassischen Verkabelung schaltet ein <b>physischer Eingang</b> (Drahtbrücke oder ein Loxone-Relais, z. B. an FE-VE3) zwischen Heizen und Kühlen. HoxPi kann diese Eingangszuordnung (Parameter <b>30-066</b>) für dich halten, falls sie flüchtig ist. Den Wert liest du am Bedienteil unter <b>30-066</b> ab.</p>
+   <div style="display:flex;gap:1rem;flex-wrap:wrap;align-items:flex-end">
+    <label>Wert laut Bedienteil (30-066):<br><input id="c066" type="number" min="0" max="31" style="width:120px;padding:.5rem;border:1px solid #dbe1ea;border-radius:8px;font-size:1.05rem"></label>
+    <label>Bezeichnung (optional):<br><input id="c066l" type="text" placeholder="z. B. VE3-FE1" style="width:180px;padding:.5rem;border:1px solid #dbe1ea;border-radius:8px"></label>
+   </div>
+   <div class="ok" style="margin-top:.9rem">Häufigster Fall (und Referenz-Anlage): <b>9 = VE3-FE1</b> — Kontakt an Klemme <b>VE3</b>, Funktionsmodul <b>FE1</b>. Wenn du unsicher bist: 9 eintragen und am Bedienteil unter 30-066 gegenprüfen. Andere Klemmen (VE1/VE2, FE2 …) haben andere Werte — dann den am Display gezeigten Wert nehmen.</div>
+   <div class="warn">ℹ️ <b>Software-Stände:</b> Der Kontakt-Weg ist Hovals Standard und läuft <b>fast unabhängig vom SW-Stand</b>. Nur falls 30-066 nicht hält (flüchtig, bei ungleichem Bedienmodul/WEZ-Stand), lässt HoxPi den Wert nachschreiben.</div>
+  </div>
+ </div>
+ <!-- Schritt 4: Home Assistant -->
+ <div class="step" data-s="3">
+  <p class="q">Nutzt du Home Assistant?</p>
+  <p class="hint">Wenn ja, veröffentlicht HoxPi alle Werte + Steuerung automatisch per MQTT (Auto-Discovery). Wenn nein, bleibt der MQTT-Dienst aus — spart Ressourcen.</p>
+  <div class="opts" data-k="ha">
+   <label class="opt"><input type="radio" name="ha" value="yes"><span><span class="t">Ja, mit Home Assistant</span><span class="d">MQTT-Auto-Discovery an. Entitäten erscheinen automatisch unter „HoxPi Wärmepumpe".</span></span></label>
+   <label class="opt"><input type="radio" name="ha" value="no"><span><span class="t">Nein / nur Loxone</span><span class="d">MQTT/HA aus. Loxone liest weiterhin direkt per Modbus-TCP.</span></span></label>
+  </div>
+ </div>
+ <!-- Schritt 5: Extras -->
+ <div class="step" data-s="4">
+  <p class="q">Welche Zusatzfunktionen möchtest du?</p>
+  <p class="hint">Alles später auf der Seite „Sicherheit → Funktionen" umschaltbar.</p>
+  <div class="opts" data-k="extras">
+   <label class="opt"><input type="checkbox" value="watch" checked><span><span class="t">Störungs-Wächter & Takt-Alarm</span><span class="d">Meldet Störungen und Verdichter-Kurztakten sofort.</span></span></label>
+   <label class="opt"><input type="checkbox" value="backup" checked><span><span class="t">Automatisches Backup</span><span class="d">Nächtliche versionierte Sicherung aller Configs.</span></span></label>
+   <label class="opt"><input type="checkbox" value="cop_filter" checked><span><span class="t">COP-Plausibilitätsfilter</span><span class="d">Filtert Ausreißer aus der Effizienz-Statistik.</span></span></label>
+  </div>
+ </div>
+ <!-- Ergebnis -->
+ <div class="step" data-s="5">
+  <p class="q">✅ Fertig — deine Konfiguration</p>
+  <div id="summary"></div>
+ </div>
+
+ <div class="nav">
+  <button class="b sec" id="back">← Zurück</button>
+  <button class="b prim" id="next" disabled>Weiter →</button>
+ </div>
+</div>
+</main>
+<footer>HoxPi · offenes Gateway für Hoval® TopTronic® E · Trockentest, keine Schreibzugriffe</footer>
+<script>
+var A={hk:null,mode:null,persist:null,c066:null,c066l:'',ha:null,extras:["watch","backup","cop_filter"]};
+var STEPS=6, cur=0;
+var prog=document.getElementById('prog');
+for(var i=0;i<STEPS;i++){var el=document.createElement('i');prog.appendChild(el);}
+
+function paint(){
+ document.querySelectorAll('.step').forEach(function(s){s.classList.toggle('on',+s.dataset.s===cur);});
+ if(cur===2){
+  document.getElementById('p-persist').style.display=(A.mode==='busfree')?'':'none';
+  document.getElementById('p-contact').style.display=(A.mode==='contact')?'':'none';
+ }
+ prog.querySelectorAll('i').forEach(function(el,i){el.className=i<cur?'done':(i===cur?'cur':'');});
+ document.getElementById('back').style.visibility=cur===0?'hidden':'visible';
+ var nx=document.getElementById('next');
+ if(cur===5){nx.style.display='none';buildSummary();}
+ else{nx.style.display='';nx.textContent=cur===4?'Konfiguration erzeugen →':'Weiter →';nx.disabled=!stepValid();}
+}
+function stepValid(){
+ if(cur===0)return A.hk!==null; if(cur===1)return A.mode!==null;
+ if(cur===2){ if(A.mode==='busfree')return A.persist!==null; if(A.mode==='contact')return A.c066!==null&&A.c066!==''&&!isNaN(+A.c066); return true; }
+ if(cur===3)return A.ha!==null; return true;
+}
+// Zahl-Buttons
+document.querySelectorAll('.num button').forEach(function(b){
+ b.onclick=function(){var g=b.closest('.num');g.querySelectorAll('button').forEach(function(x){x.classList.remove('sel');});b.classList.add('sel');A[g.dataset.k]=+b.dataset.v;document.getElementById('next').disabled=!stepValid();};
+});
+// Radios
+document.querySelectorAll('.opts').forEach(function(g){
+ g.querySelectorAll('input[type=radio]').forEach(function(r){
+  r.onchange=function(){g.querySelectorAll('.opt').forEach(function(o){o.classList.remove('sel');});r.closest('.opt').classList.add('sel');A[g.dataset.k]=r.value;document.getElementById('next').disabled=!stepValid();};
+ });
+ g.querySelectorAll('input[type=checkbox]').forEach(function(c){
+  c.onchange=function(){c.closest('.opt').classList.toggle('sel',c.checked);A.extras=Array.prototype.map.call(g.querySelectorAll('input:checked'),function(x){return x.value;});};
+ });
+});
+// Kontakt-Eingaben erfassen
+document.getElementById('c066').addEventListener('input',function(){A.c066=this.value;document.getElementById('next').disabled=!stepValid();});
+document.getElementById('c066l').addEventListener('input',function(){A.c066l=this.value;});
+document.getElementById('next').onclick=function(){
+ // Schritt 2 (Persistenz/Kontakt) nur bei "nur mitlesen" überspringen
+ if(cur===1 && A.mode==='readonly'){cur=3;} else {cur++;}
+ paint();
+};
+document.getElementById('back').onclick=function(){
+ if(cur===3 && A.mode==='readonly'){cur=1;} else {cur--;}
+ paint();
+};
+
+function buildSummary(){
+ var HKREG={1:{h:1490,c:19482},2:{h:1491,c:23755},3:{h:1492,c:23756}};
+ // features.json
+ var feats={
+  watch:{enabled:A.extras.indexOf('watch')>=0},
+  mqtt_ha:{enabled:A.ha==='yes'},
+  cop_filter:{enabled:A.extras.indexOf('cop_filter')>=0},
+  backup:{enabled:A.extras.indexOf('backup')>=0},
+  keepalive:{enabled:(A.mode==='busfree'&&A.persist==='yes')||A.mode==='contact'}
+ };
+ var kd={};
+ if(A.mode==='busfree'&&A.persist==='yes'){
+  kd["30046"]={enabled:true,value:0,label:"Eingang Ext. Konstantanforderung Heizen → AUS"};
+  kd["30057"]={enabled:true,value:0,label:"Eingang Ext. Konstantanforderung Kühlen → AUS"};
+  kd["30066"]={enabled:true,value:0,label:"Eingang Umschaltung Heizen/Kühlen → AUS"};
+  kd["3032"]={enabled:false,value:3,label:"Regelstrategie 3 — redundant (Loxone schreibt sie)"};
+ }else if(A.mode==='contact'){
+  kd["30066"]={enabled:true,value:(+A.c066),label:"Umschaltung Heizen/Kühlen → "+(A.c066l||('Wert '+A.c066))};
+ }
+ if(Object.keys(kd).length) feats.keepalive_dps=kd;
+ // Kanal-Exklusion Register
+ var pairs=[];
+ for(var i=1;i<=A.hk;i++){pairs.push(HKREG[i]);}
+ var exText=pairs.map(function(p,i){return 'HK'+(i+1)+': Heizen <code>'+p.h+'</code> ↔ Kühlen <code>'+p.c+'</code>';}).join('<br>');
+
+ var mm={busfree:'Relais-frei über den Bus',contact:'Klassisch über Kontakt/Brücke',readonly:'Nur mitlesen'}[A.mode];
+ var rows='';
+ function row(k,v){return '<tr><td>'+k+'</td><td>'+v+'</td></tr>';}
+ rows+=row('Heizkreise', A.hk);
+ rows+=row('Steuerung', mm);
+ if(A.mode==='busfree') rows+=row('30-xxx nachschreiben', A.persist==='yes'?'<span class="pill pon">ja</span>':'<span class="pill poff">nein</span>');
+ if(A.mode==='contact') rows+=row('Umschalt-Kontakt (30-066)', (A.c066l?A.c066l+' = ':'')+'<code>'+A.c066+'</code>');
+ rows+=row('Home Assistant', A.ha==='yes'?'<span class="pill pon">an (MQTT)</span>':'<span class="pill poff">aus</span>');
+ rows+=row('Störungs-Wächter', feats.watch.enabled?'<span class="pill pon">an</span>':'<span class="pill poff">aus</span>');
+ rows+=row('Backup', feats.backup.enabled?'<span class="pill pon">an</span>':'<span class="pill poff">aus</span>');
+ rows+=row('COP-Filter', feats.cop_filter.enabled?'<span class="pill pon">an</span>':'<span class="pill poff">aus</span>');
+ rows+=row('Keepalive (Bus)', feats.keepalive.enabled?'<span class="pill pon">an</span>':'<span class="pill poff">aus</span>');
+
+ var todo=[];
+ todo.push('Kanal-Exklusion für '+A.hk+' Heizkreis'+(A.hk>1?'e':'')+' aktiv (nur ein Register ≠ 0 je Kreis).');
+ if(A.mode==='busfree'){
+  if(A.persist==='yes') todo.push('Keepalive hält 30-046/057/066 = AUS (alle 5 Min) → Original-Template läuft relais-frei.');
+  else todo.push('Kein Keepalive — du bestätigst, dass die 30-xxx auf deiner Anlage von selbst halten.');
+  todo.push('Sollwert-Register (1490/19482 …) müssen in der Whitelist freigegeben werden (Seite „Register").');
+ } else if(A.mode==='contact'){
+  todo.push('HoxPi hält die Kontakt-Zuordnung 30-066 = '+A.c066+(A.c066l?' ('+A.c066l+')':'')+' nach — der physische Kontakt schaltet Heizen/Kühlen.');
+  todo.push('Sollwert-Register (1490/19482 …) in der Whitelist freigeben (Seite „Register").');
+ } else {
+  todo.push('Keine Schreibfreigaben nötig — reines Monitoring.');
+ }
+ todo.push(A.ha==='yes'?'MQTT-Dienst aktiv → HA-Entitäten erscheinen automatisch.':'MQTT-Dienst bleibt aus.');
+
+ var conf={};for(var k in feats)conf[k]=feats[k];
+ var json=JSON.stringify(conf,null,1);
+
+ var html='<div class="ok" style="margin:.6rem 0 1rem">Auf Basis deiner Angaben würde HoxPi so konfiguriert. Nichts davon ist geschrieben — reiner Trockentest.</div>';
+ html+='<table>'+rows+'</table>';
+ html+='<h2>Kanal-Exklusion (Register-Paare)</h2><p style="color:#5a6675;font-size:.92rem;line-height:1.5">'+exText+'</p>';
+ html+='<h2>Was HoxPi tun würde</h2><ul style="line-height:1.7;color:#3a4554">'+todo.map(function(t){return '<li>'+t+'</li>';}).join('')+'</ul>';
+ html+='<h2>Erzeugte <code>hoxpi-features.json</code></h2><pre id="jsonout">'+json.replace(/</g,'&lt;')+'</pre>';
+ html+='<button class="b sec" onclick="copyj()">📋 JSON kopieren</button> <button class="b sec" onclick="location.reload()">↺ Neu starten</button>';
+ html+='<h2>So geht es weiter</h2><ol style="line-height:1.7;color:#3a4554">'
+  +'<li><b>HoxPi muss erst existieren</b> — Raspberry Pi, CAN-Adapter, Software. Die vollständige <b>Installationsanleitung</b> (von der leeren SD-Karte bis zum laufenden Dashboard) liegt separat bei: <code>HoxPi_Installation.md</code>.</li>'
+  +'<li><b>2FA einrichten</b> (empfohlen, aber optional): Auf der Dashboard-Seite <b>Sicherheit</b> einmalig einen 2FA-Code (Authenticator-App) einrichten. Ohne 2FA ist das Dashboard im Heimnetz trotzdem nur lokal erreichbar.</li>'
+  +'<li><b>Übernehmen:</b> Im echten Dashboard schreibt ein „Übernehmen"-Knopf diese <code>hoxpi-features.json</code> auf den Pi — geschützt durch das 2FA-Login (falls eingerichtet). <b>Im Trockentest hier ist er bewusst aus</b>, damit garantiert nichts geschrieben wird.</li>'
+  +'</ol>';
+ document.getElementById('summary').innerHTML=html;
+ window._json=json;
+}
+function copyj(){navigator.clipboard.writeText(window._json||'').then(function(){alert('JSON in die Zwischenablage kopiert.');});}
+paint();
+</script>
+</body></html>

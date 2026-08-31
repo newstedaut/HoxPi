@@ -52,7 +52,7 @@ The installer asks to download the **official Hoval datapoint list** (xlsx) from
 - Run in a **trusted home network**; nothing leaves your network — no cloud, no telemetry
 - Writing starts disabled except for a small, curated whitelist; every write is additionally validated (range, rate limit, cold-cache)
 
-## Credits
+## Credits & thanks
 
 Protocol knowledge builds on the great reverse-engineering work of
 [hpoeckl/hoval-exporter](https://github.com/hpoeckl/hoval-exporter) (MIT),
@@ -60,6 +60,13 @@ Protocol knowledge builds on the great reverse-engineering work of
 [chrishrb/hoval-gateway](https://github.com/chrishrb/hoval-gateway) (Apache-2.0) and
 [parren/hoval-ultrasource-agent](https://github.com/parren/hoval-ultrasource-agent) (MIT).
 No code was copied from these projects; HoxPi is an independent implementation.
+
+Special thanks to:
+
+- **Dr. Waag / MyHome-Control** — [myhome-control.de](https://www.myhome-control.de) — for generously sharing deep TopTronic-E parameter know-how. Well worth a look for Loxone-friendly hardware (CAN gateways, WLED controllers).
+- **[nliaudat/esp_canbus](https://github.com/nliaudat/esp_canbus)** and everyone contributing to the shared, community-maintained [Hoval datapoint catalogue](https://github.com/newstedaut/hoval_datapoints).
+- **[ivantichy/loxone-mcp-proxy](https://github.com/ivantichy/loxone-mcp-proxy)** for the Loxone MCP groundwork.
+- The whole **Hoval / Loxone / Home Assistant** community — and everyone who tests, reports and improves HoxPi. 🙏
 
 ## Support
 
@@ -88,7 +95,15 @@ HoxPi liest den CAN-Bus einer Hoval® TopTronic® E-Anlage (Wärmepumpe, Wohnrau
 - **SG-Ready / PV-Überschuss**: volle Unterstützung der Hoval-Smart-Grid-Offset-Register (Use Case 8 der Hoval-Modbus-Guideline)
 - **KI-Schnittstelle (MCP)**: eingebauter [Model-Context-Protocol](https://modelcontextprotocol.io)-Server (`http://<pi-ip>:8808/mcp`) — KI-Assistenten wie Claude können die Anlage live inspizieren, Werte erklären, die Historie auswerten und Fehler eingrenzen. Einbindung in **Claude Desktop** per `mcp-remote` in der `claude_desktop_config.json` (braucht Node.js; der fertige Block steht auf der Dashboard-Seite *Integration* — Claudes gehostete „Custom Connectors" verlangen eine öffentliche https-Adresse, im Heimnetz ist die lokale Brücke der richtige Weg). Schreiben via MCP ist **standardmäßig aus** (`config.json: enable_write`) und verlangt immer eine explizite Bestätigung plus alle Bridge-Sicherungen
 
+- **Relais-freier Original-Template-Betrieb**: Kanal-Exklusion (nur ein Sollwert-Register je Heizkreis) + Keepalive hält die Eingänge 30-046/057/066 = AUS → das **unveränderte** Hoval-Template steuert Heizen/Kühlen **kontaktlos**, ganz ohne Drahtbrücke oder Relais
+- **Störungs-Wächter & Verdichter-Kurzzyklus-Alarm**: meldet Fehlercodes, Hoch-/Niederdruck, Warmwasser-Ausfall und Kurztakten sofort an Home Assistant, Logdatei und optional Webhook
+- **Automatisches Backup**: nächtliche, versionierte Sicherung aller Skripte & Configs
+- **Funktions-Schalter** (Dashboard → *Sicherheit*): jede Zusatzfunktion einzeln ein-/ausschaltbar (inkl. jedem Keepalive-Eingang), hinter 2FA
+- **Inbetriebnahme-Assistent** (`assistant/hoxpi_assistent.html`): geführtes, browserbasiertes Setup, erzeugt die passende `hoxpi-features.json` (Trockentest, schreibt nichts)
+
 ## Installation
+
+Ausführliche Schritt-für-Schritt-Anleitung: **[INSTALL.md](INSTALL.md)**. Kurzform:
 
 ```bash
 git clone <dieses Repo> && cd hoxpi
@@ -115,6 +130,13 @@ Das Protokoll-Wissen baut auf der Reverse-Engineering-Arbeit von
 [chrishrb/hoval-gateway](https://github.com/chrishrb/hoval-gateway) (Apache-2.0) und
 [parren/hoval-ultrasource-agent](https://github.com/parren/hoval-ultrasource-agent) (MIT) auf.
 Es wurde kein Code übernommen — HoxPi ist eine eigenständige Implementierung.
+
+Besonderer Dank an:
+
+- **Dr. Waag / MyHome-Control** — [myhome-control.de](https://www.myhome-control.de) — für das großzügige Teilen von tiefem TopTronic-E-Parameterwissen. Ein Blick lohnt sich für Loxone-freundliche Hardware (CAN-Gateways, WLED-Controller).
+- **[nliaudat/esp_canbus](https://github.com/nliaudat/esp_canbus)** und alle, die am gemeinsamen, community-gepflegten [Hoval-Datenpunkt-Katalog](https://github.com/newstedaut/hoval_datapoints) mitwirken.
+- **[ivantichy/loxone-mcp-proxy](https://github.com/ivantichy/loxone-mcp-proxy)** für die Loxone-MCP-Grundlage.
+- Die gesamte **Hoval- / Loxone- / Home-Assistant-Community** — und alle, die HoxPi testen, Fehler melden und verbessern. 🙏
 
 ## Unterstützen
 
