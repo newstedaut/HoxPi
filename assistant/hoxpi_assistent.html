@@ -47,7 +47,7 @@ h2{font-size:1.15rem;color:#e2001a;margin:1.4rem 0 .4rem}
 <main>
 <h1>Inbetriebnahme-Assistent</h1>
 <p class="sub">In wenigen Schritten die passende HoxPi-Konfiguration erzeugen — für deine Anlage.</p>
-<div class="dry">🧪 <b>Trockentest:</b> Dieser Assistent läuft komplett im Browser und schreibt <b>nichts</b> auf die Anlage. Am Ende bekommst du die fertige Konfiguration zum Ansehen/Kopieren.</div>
+<div class="dry" id="drybanner">🧪 <b>Trockentest:</b> Dieser Assistent läuft komplett im Browser und schreibt <b>nichts</b> auf die Anlage. Am Ende bekommst du die fertige Konfiguration zum Ansehen/Kopieren.</div>
 
 <div class="prog" id="prog"></div>
 
@@ -122,7 +122,7 @@ h2{font-size:1.15rem;color:#e2001a;margin:1.4rem 0 .4rem}
  </div>
 </div>
 </main>
-<footer>HoxPi · offenes Gateway für Hoval® TopTronic® E · Trockentest, keine Schreibzugriffe</footer>
+<footer id="assfoot">HoxPi · offenes Gateway für Hoval® TopTronic® E · Trockentest, keine Schreibzugriffe</footer>
 <script>
 var A={hk:null,mode:null,persist:null,c066:null,c066l:'',ha:null,extras:["watch","backup","cop_filter"]};
 var STEPS=6, cur=0;
@@ -259,5 +259,9 @@ function applyj(){
 }
 function copyj(){navigator.clipboard.writeText(window._json||'').then(function(){alert('JSON in die Zwischenablage kopiert.');});}
 paint();
+if(location.protocol.indexOf('http')===0){
+ document.getElementById('drybanner').innerHTML='🔧 <b>Live:</b> Dieser Assistent läuft direkt auf deinem HoxPi. Beim Durchklicken wird <b>nichts</b> geschrieben — erst der Knopf „Auf diesem HoxPi übernehmen" am Ende speichert die Konfiguration (bei aktiver 2FA nur mit Anmeldung).';
+ document.getElementById('assfoot').innerHTML='HoxPi · offenes Gateway für Hoval® TopTronic® E · <a href="/">zurück zum Dashboard</a>';
+}
 </script>
 </body></html>
