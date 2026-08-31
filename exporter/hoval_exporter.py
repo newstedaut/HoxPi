@@ -24,12 +24,20 @@ R16 = {
  "hoval_offset_hk1_k": (27528, 0.1, False),
  "hoval_offset_kk1_k": (27531, 0.1, False),
  "hoval_uka": (19870, 1, False),
+  "hoval_fa_cop": (27490, 0.1, False),
+  "hoval_quelle_vl_c": (27491, 0.1, True),
+  "hoval_quelle_rl_c": (27492, 0.1, True),
+  "hoval_wasserdruck_bar": (1538, 0.1, True),
+  "hoval_fa_kuehl_soll_c": (1524, 0.1, True),
+  "hoval_fa_wez_temp_c": (1525, 0.1, True),
+  "hoval_fa_ruecklauf_c": (1535, 0.1, True),
 }
 # name -> (highreg, scale)
 R32 = {
  "hoval_cop": (31667, 0.1),
  "hoval_energie_el_mwh": (25613, 0.001),
  "hoval_waerme_heizen_mwh": (27484, 0.001),
+ "hoval_waerme_kuehlen_mwh": (27486, 0.001),
  "hoval_waerme_ww_mwh": (27488, 0.001),
  "hoval_schaltzyklen": (1518, 1),
 }
@@ -68,12 +76,16 @@ def rd(addr, words=1):
 
 def metrics():
     out = []
+    import json as _j
+    try: _copf=_j.load(open("/home/admin/hoxpi-features.json")).get("cop_filter",{}).get("enabled",True)
+    except Exception: _copf=True
     for name, (reg, sc, sg) in R16.items():
         w = rd(reg)
         if not w: continue
         v = w[0]
         if v in (0x8000, 0xFFFF): continue
         if sg and v > 32767: v -= 65536
+        if _copf and name=="hoval_fa_cop" and not (0 <= v*sc <= 20): continue  # COP-Plausibilitaet
         if name in HELP: out.append(f"# HELP {name} {HELP[name]}")
         out.append(f"# TYPE {name} gauge")
         out.append(f"{name} {round(v*sc, 3)}")
@@ -81,6 +93,7 @@ def metrics():
         w = rd(reg, 2)
         if not w or len(w) < 2: continue
         v = (w[0] << 16) | w[1]
+        if _copf and name=="hoval_cop" and not (0 <= v*sc <= 20): continue  # COP-Plausibilitaet
         typ = "counter" if "mwh" in name or "zyklen" in name else "gauge"
         out.append(f"# TYPE {name} {typ}")
         out.append(f"{name} {round(v*sc, 4)}")
