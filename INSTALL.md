@@ -6,6 +6,18 @@ so wie das originale, kostenpflichtige Hoval-Gateway. Loxone und Home Assistant 
 1:1 an. Zusätzlich: Dashboard, Störungs-Wächter, Backup, Home-Assistant-Auto-Discovery und
 der **Inbetriebnahme-Assistent**.
 
+## ⚡ Schnellstart (empfohlen)
+
+Wer nicht alles von Hand machen will: Abschnitte **1–3** (Hardware, OS, SSH) erledigen, dann übernimmt `install.sh` den Rest — Pakete, CAN-Dienst, Registerlisten, alle Dienste, Wächter, Backup, Cronjobs, optional Home Assistant/Grafana/MCP:
+
+```bash
+git clone https://github.com/newstedaut/HoxPi.git && cd HoxPi
+sudo bash install.sh          # interaktiv — fragt bei jedem optionalen Teil nach
+# oder: sudo bash install.sh --yes   (alles automatisch)
+```
+
+Danach weiter bei Abschnitt **7** (2FA) und **8** (Inbetriebnahme-Assistent). Die Abschnitte 4–6 unten beschreiben, was install.sh im Detail tut — nützlich zum Verstehen und für Sonderfälle.
+
 > Diese Anleitung beschreibt den Nachbau. Alle fertigen Skripte/Configs liegen im Repo bzw.
 > im jüngsten Backup (`Heizung/HoxPi-Backups/hoxpi_*.tar.gz`).
 
