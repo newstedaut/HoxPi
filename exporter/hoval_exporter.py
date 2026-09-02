@@ -10,7 +10,6 @@ R16 = {
  "hoval_ww_ist_c": (1500, 0.1, True),
  "hoval_ww_soll_c": (1499, 0.1, True),
  "hoval_raum_ist_c": (1510, 0.1, True),
- "hoval_wasserdruck_bar": (18738, 0.1, True),
  "hoval_p_el_kw": (25611, 0.01, True),
  "hoval_p_th_kw": (25612, 1, True),
  "hoval_modulation_pct": (18726, 1, False),
@@ -35,8 +34,21 @@ R16 = {
  "hoval_fa_kuehl_soll_c": (1524, 0.1, True),
  "hoval_fa_wez_temp_c": (1525, 0.1, True),
  "hoval_fa_ruecklauf_c": (1535, 0.1, True),
+ # --- FA-Ebene fg=60/fn=254 + Anlageleistung (Backlog #8, 02.09.2026) ---
+ "hoval_wez_status": (1539, 1, False),
+ "hoval_fehlercode": (1534, 1, False),
+ "hoval_leistung_soll_heizen_pct": (18764, 0.1, True),
+ "hoval_leistung_soll_ww_pct": (18765, 0.1, True),
+ "hoval_leistung_soll_kuehlen_pct": (18766, 0.1, True),
+ "hoval_leistung_soll_aktiv_pct": (18767, 0.1, True),
+ "hoval_leistung_anforderung": (18768, 1, False),
 }
-# name -> (highreg, scale)
+# Rohwerte, die "kein Wert" bedeuten (zusaetzlich zu 0x8000/0xFFFF)
+INVALID16 = {
+ "hoval_leistung_soll_heizen_pct": {-1270}, "hoval_leistung_soll_ww_pct": {-1270},
+ "hoval_leistung_soll_kuehlen_pct": {-1270}, "hoval_leistung_soll_aktiv_pct": {-1270},
+}
+# name -> (highreg, scale[, signed])
 R32 = {
  "hoval_cop": (31667, 0.1),
  "hoval_energie_el_mwh": (25613, 0.001),
@@ -44,9 +56,22 @@ R32 = {
  "hoval_waerme_kuehlen_mwh": (27486, 0.001),
  "hoval_waerme_ww_mwh": (27488, 0.001),
  "hoval_schaltzyklen": (1518, 1),
+ # --- fg=60/fn=7 Hydraulik + Laufzeitzaehler (Backlog #8, 02.09.2026) ---
+ "hoval_betriebsstunden_heizen_h": (31711, 0.1),   # dp1033, Skala 0,1 h
+ "hoval_betriebsstunden_kuehlen_h": (31713, 0.1),  # dp1034 (Hovals Name an 31663 ist falsch)
+ "hoval_betriebsstunden_ww_h": (31715, 0.1),       # dp1035
+ "hoval_wp_vorlauf_c": (31892, 0.1, True),         # dp257 WP-Vorlauf (S32)
+ "hoval_wp_ruecklauf_c": (31894, 0.1, True),       # dp258 WP-Ruecklauf (S32)
+ "hoval_wp_pumpe_pct": (27495, 1),                 # dp271 Drehzahl WP-Umwaelzpumpe, 0xFFFFFFFF = aus -> 0
+ "hoval_volumenstrom_lmin": (31707, 0.1),          # dp302 Volumenstrom gemittelt
 }
+COUNTER32 = ("mwh", "zyklen", "betriebsstunden")
 HELP = {
  "hoval_hc1_status": "0=Aus 1..3=Heizen 9..11=Kuehlen 12=Stoerung 26=SmartGrid",
+ "hoval_wez_status": "0=Aus 1=Heizen 2=Kuehlen 4=Warmwasser 16=Wiedereinschaltsperre 51=Startvorbereitung",
+ "hoval_fehlercode": "255=OK, sonst Hoval-Fehlercode",
+ "hoval_leistung_soll_aktiv_pct": "aktiver Leistungs-Sollwert (-100=keine Anforderung; -127=ungueltig wird unterdrueckt)",
+ "hoval_wp_pumpe_pct": "Drehzahl WP-Umwaelzpumpe (0=aus)",
  "hoval_ww_status": "0=Aus 1=Laden 8=Laden reduziert 12=SmartGrid",
  "hoval_sg_status": "0=Normal 1=Vorzug 2=Gesperrt 3=Abnahmezwang",
 }
@@ -89,16 +114,24 @@ def metrics():
         v = w[0]
         if v in (0x8000, 0xFFFF): continue
         if sg and v > 32767: v -= 65536
+        if v in INVALID16.get(name, ()): continue
         if _copf and name in ("hoval_fa_cop",) and not (0 <= v*sc <= 20): continue  # COP-Plausibilitaet
         if name in HELP: out.append(f"# HELP {name} {HELP[name]}")
         out.append(f"# TYPE {name} gauge")
         out.append(f"{name} {round(v*sc, 3)}")
-    for name, (reg, sc) in R32.items():
+    for name, spec in R32.items():
+        reg, sc = spec[0], spec[1]; sg = len(spec) > 2 and spec[2]
         w = rd(reg, 2)
         if not w or len(w) < 2: continue
         v = (w[0] << 16) | w[1]
+        if v == 0xFFFFFFFF:
+            if name == "hoval_wp_pumpe_pct": v = 0
+            else: continue
+        if v == 0x80000000: continue
+        if sg and v > 0x7FFFFFFF: v -= 0x100000000
         if _copf and name == "hoval_cop" and not (0 <= v*sc <= 20): continue  # COP-Plausibilitaet
-        typ = "counter" if "mwh" in name or "zyklen" in name else "gauge"
+        typ = "counter" if any(k in name for k in COUNTER32) else "gauge"
+        if name in HELP: out.append(f"# HELP {name} {HELP[name]}")
         out.append(f"# TYPE {name} {typ}")
         out.append(f"{name} {round(v*sc, 4)}")
     return "\n".join(out) + "\n"
