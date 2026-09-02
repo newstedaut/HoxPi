@@ -12,9 +12,12 @@ Wer nicht alles von Hand machen will: Abschnitte **1–3** (Hardware, OS, SSH) e
 
 ```bash
 git clone https://github.com/newstedaut/HoxPi.git && cd HoxPi
+bash install.sh --dry-run     # Trockenlauf: prüft Python/CAN-Adapter/Dateien und zeigt nur, was passieren würde
 sudo bash install.sh          # interaktiv — fragt bei jedem optionalen Teil nach
 # oder: sudo bash install.sh --yes   (alles automatisch)
 ```
+
+`--dry-run` braucht kein root und ändert nichts. Bricht die Installation ab, nennt sie den Schritt — das Skript ist idempotent und kann nach der Korrektur einfach erneut gestartet werden (bestehende `whitelist.json`/`hoxpi-features.json` bleiben erhalten).
 
 Danach weiter bei Abschnitt **7** (2FA) und **8** (Inbetriebnahme-Assistent). Die Abschnitte 4–6 unten beschreiben, was install.sh im Detail tut — nützlich zum Verstehen und für Sonderfälle.
 

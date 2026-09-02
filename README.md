@@ -57,6 +57,7 @@ CAN wiring: tap the bus **in parallel** at the Hoval **WEZ module**, terminal "+
 
 ```bash
 git clone https://github.com/newstedaut/HoxPi.git hoxpi && cd hoxpi
+bash install.sh --dry-run    # preflight only (Python, CAN adapter, files) - shows what would happen, changes nothing
 sudo bash install.sh --yes   # fully automatic incl. Grafana; omit --yes for interactive
 ```
 
@@ -150,6 +151,7 @@ Ausführliche Schritt-für-Schritt-Anleitung: **[INSTALL.md](INSTALL.md)**. Kurz
 
 ```bash
 git clone <dieses Repo> && cd hoxpi
+bash install.sh --dry-run    # optional: Trockenlauf, ändert nichts
 sudo bash install.sh
 ```
 
