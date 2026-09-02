@@ -38,14 +38,22 @@ def verlauf_api_handler(q):
         return 502, json.dumps({"error": str(e)}).encode(), "application/json"
 
 
-def verlauf_page():
-    """Gibt HTML-Body-String zurück."""
+def verlauf_page(lang="de"):
+    """Gibt HTML-Body-String zurück (lang = "de" | "en")."""
+    en = (lang == "en")
     metrics_js = json.dumps([
-        {"m": m, "label": lde, "color": col}
-        for m, lde, _, col in METRICS
+        {"m": m, "label": (len_ if en else lde), "color": col}
+        for m, lde, len_, col in METRICS
     ])
-    return f"""<h1>&#128200; Verlauf</h1>
-<p style="color:#6c7787;margin:.2rem 0 1.2rem">Temperaturen, Leistung und COP der letzten 24&nbsp;h / 7&nbsp;Tage / 30&nbsp;Tage.</p>
+    t_title = "History" if en else "Verlauf"
+    t_sub = ("Temperatures, power and COP of the last 24&nbsp;h / 7&nbsp;days / 30&nbsp;days." if en
+             else "Temperaturen, Leistung und COP der letzten 24&nbsp;h / 7&nbsp;Tage / 30&nbsp;Tage.")
+    j_nodata = "No data" if en else "Keine Daten"
+    j_loading = "Loading data\u2026" if en else "Lade Daten\u2026"
+    j_updated = "Updated: " if en else "Aktualisiert: "
+    j_error = "Error: " if en else "Fehler: "
+    return f"""<h1>&#128200; {t_title}</h1>
+<p style="color:#6c7787;margin:.2rem 0 1.2rem">{t_sub}</p>
 
 <div style="display:flex;gap:.5rem;margin-bottom:1.2rem;flex-wrap:wrap">
   <button onclick="vload(24)"  id="b24"  class="rbtn act">24 h</button>
@@ -75,7 +83,7 @@ function vfmt(ts,hours){{
   return (d.getDate()).toString().padStart(2,'0')+'.'+(d.getMonth()+1).toString().padStart(2,'0')+' '+d.getHours().toString().padStart(2,'0')+'h';
 }}
 function vdraw(area,values,color,hours){{
-  if(!values||values.length<2){{area.innerHTML='<span style="color:#aaa;font-size:.85rem">Keine Daten</span>';return;}}
+  if(!values||values.length<2){{area.innerHTML='<span style="color:#aaa;font-size:.85rem">{j_nodata}</span>';return;}}
   var W=Math.max(300,area.getBoundingClientRect().width||600),H=130;
   var PADl=42,PADr=10,PADt=8,PADb=26;
   var iW=W-PADl-PADr,iH=H-PADt-PADb;
@@ -109,7 +117,7 @@ function vload(hours){{
   document.getElementById(hours===24?'b24':hours===168?'b168':'b720').classList.add('act');
   var box=document.getElementById('vcharts');
   box.innerHTML='';
-  document.getElementById('vstat').textContent='Lade Daten…';
+  document.getElementById('vstat').textContent='{j_loading}';
   var done=0;
   VMETRICS.forEach(function(m){{
     var wrap=document.createElement('div');wrap.className='vgraph';
@@ -121,9 +129,9 @@ function vload(hours){{
       .then(function(d){{
         var res=d.data&&d.data.result&&d.data.result[0];
         vdraw(area,res?res.values:null,m.color,hours);
-        if(++done===VMETRICS.length) document.getElementById('vstat').textContent='Aktualisiert: '+new Date().toLocaleTimeString();
+        if(++done===VMETRICS.length) document.getElementById('vstat').textContent='{j_updated}'+new Date().toLocaleTimeString();
       }})
-      .catch(function(e){{area.textContent='Fehler: '+e;done++;}});
+      .catch(function(e){{area.textContent='{j_error}'+e;done++;}});
   }});
 }}
 window.addEventListener('load',function(){{vload(24);}});

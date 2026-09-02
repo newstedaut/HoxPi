@@ -4,7 +4,7 @@ import http.server, socketserver, html, json, datetime, time as _time, threading
 try:
     from verlauf_module import verlauf_page, verlauf_api_handler as _vah
 except ImportError:
-    verlauf_page = lambda: "<p>verlauf_module.py fehlt</p>"
+    verlauf_page = lambda *a: "<p>verlauf_module.py fehlt</p>"
     _vah = lambda q: (503, b'{"error":"module missing"}', "application/json")
 from urllib.parse import urlparse, parse_qs
 
@@ -32,6 +32,29 @@ ST_HP  = {0:"Aus",1:"Heizen",2:"Aktiv-Kühlen",3:"Sperre",4:"WW-Laden",5:"Frosts
           6:"WEZ-Temp zu tief",7:"VL zu hoch",8:"Abtauen",9:"Passiv-Kühlen",
           11:"Hochdruck-Störung",12:"Niederdruck-Störung",16:"Wiederanlauf",17:"EVU-Sperre",
           18:"Vorlaufzeit",19:"Nachlaufzeit",51:"Kondensatorpumpe",55:"Inverter-Störung"}
+ST_HC_EN  = {0:"Off",1:"Heating normal",2:"Heating comfort",3:"Heating eco",4:"Frost protection",
+          5:"Forced offtake",6:"Forced reduction",7:"Holiday",8:"Party",9:"Cooling normal",
+          12:"Fault",13:"Manual mode",22:"Cooling external",23:"Heating external",26:"SmartGrid"}
+ST_DHW_EN = {0:"Off",1:"Charging normal",2:"Charging comfort",5:"Fault",6:"Tapping",
+          8:"Charging reduced",12:"SmartGrid",13:"SmartGrid forced"}
+ST_HP_EN  = {0:"Off",1:"Heating",2:"Active cooling",3:"Blocked",4:"DHW charging",5:"Frost protection",
+          6:"Generator temp. too low",7:"Flow too high",8:"Defrosting",9:"Passive cooling",
+          11:"High-pressure fault",12:"Low-pressure fault",16:"Restart",17:"Utility lock (EVU)",
+          18:"Pre-run time",19:"Post-run time",51:"Condenser pump",55:"Inverter fault"}
+ENUM_EN = {
+ 1478:{0:"Standby",1:"Week 1",2:"Week 2",4:"Constant",5:"Eco mode",7:"Manual heating",8:"Manual cooling"},
+ 1496:{0:"Standby",1:"Week 1",2:"Week 2",4:"Constant",6:"Eco mode"},
+ 23622:{0:"Standby",1:"Week 1",2:"Week 2",4:"Constant mode",5:"Eco mode"},
+ 23631:{0:"Off / standby",1:"Normal operation",2:"VOC mode",3:"Humidity mode",4:"Frost protection",
+        5:"CoolVet (cooling)",6:"Fault",7:"Summer humidity",8:"Switch-off stop"},
+}
+def st_txt(table_de, table_en, raw):
+    """Statustext in der aktuellen Sprache; unbekannter Code -> 'Code n'."""
+    t = table_en if curlang() == "en" else table_de
+    return t.get(raw, f"Code {raw}")
+def enum_txt(reg, raw):
+    t = (ENUM_EN.get(reg) if curlang() == "en" else None) or ENUM.get(reg, {})
+    return t.get(raw, f"Code {raw}")
 # Enum-Texte (Register-spezifisch, aus offizieller Hoval-Tabelle, dt.)
 ENUM = {
  1478:{0:"Standby",1:"Woche 1",2:"Woche 2",4:"Konstant",5:"Sparbetrieb",7:"Hand Heizen",8:"Hand Kühlen"},
@@ -159,6 +182,63 @@ DESC = {
 }
 
 # Übersetzung der Bezeichnungen (Bereiche, Unterüberschriften, Wertnamen) für die Werte-Seite
+DESC_EN = {
+ 1477:"Current outdoor temperature (heat-pump sensor). Basis for the weather-compensated heating curve.",
+ 1540:"Operating state of the heat pump (e.g. heating, cooling, hot water, defrosting, standby).",
+ 18726:"Current compressor output in percent. 0 % = off, 100 % = full load.",
+ 25611:"Electrical power currently drawn (power consumption of the heat pump).",
+ 25612:"Thermal output currently delivered to heating or hot water.",
+ 27467:"Coefficient of performance (COP): heat delivered divided by electricity used. Higher = more efficient.",
+ 18738:"Water pressure in the heating circuit. Normal approx. 1–2 bar. Too low → top up water.",
+ 18742:"Temperature of the heating water returning to the heat pump.",
+ 1525:"Temperature at the heat generator itself (internal flow of the heat pump).",
+ 18767:"Output the controller currently requests from the heat generator (active channel: heating, cooling or hot water). Rises shortly before a compressor start — early indicator, not a start criterion. −100 = no demand.",
+ 18768:"Shows whether any demand is pending at the heat generator (yes/no). Companion value to the output setpoint.",
+ 1478:"Selected operating mode of the heating circuit (automatic, comfort, eco, off …).",
+ 1501:"Current state of the heating circuit (heating, cooling, off …).",
+ 1510:"Currently measured room temperature of the heating circuit.",
+ 1493:"Currently valid room-temperature setpoint (results from the operating mode).",
+ 1513:"Flow: temperature of the warm water going into the underfloor heating.",
+ 1535:"Return: temperature of the water coming back from the underfloor heating.",
+ 1520:"Flow-temperature setpoint of the heating circuit (calculated from the heating curve).",
+ 1524:"Flow-temperature setpoint in cooling mode (slow underfloor cooling).",
+ 19658:"Mixing-valve position heating circuit 1 (Hoval: mixer HC1) — blends flow and return to the flow setpoint. Which floor/room this is, you assign yourself (file labels.json).",
+ 19659:"Mixing-valve position heating circuit 2 (Hoval: mixer HC2) — blends flow and return to the flow setpoint.",
+ 1496:"Selected operating mode of domestic hot water (automatic, normal, eco, off).",
+ 1500:"Current temperature in the hot-water tank (upper sensor).",
+ 27483:"Hot-water temperature at the second/lower tank sensor.",
+ 1499:"Currently valid hot-water setpoint.",
+ 1497:"Hot-water setpoint in normal mode. Adjustable via Loxone (writable).",
+ 1498:"Hot-water setpoint in eco/saving mode.",
+ 1504:"Current state of hot-water preparation (charging, ready, off …).",
+ 23622:"Selected operating mode of the ventilation unit.",
+ 23625:"Current ventilation modulation in percent (air-volume setpoint from operating mode and settings).",
+ 23623:"Fan-stage setpoint in normal mode.",
+ 23624:"Fan-stage setpoint in eco/saving mode.",
+ 23626:"Humidity setpoint – above it the ventilation may raise the stage.",
+ 23631:"Current control state of the ventilation.",
+ 23632:"Temperature of the fresh air drawn in from outside.",
+ 23629:"Air quality (volatile organic compounds, VOC) of the outdoor air.",
+ 23633:"Temperature of the air extracted from the rooms.",
+ 23627:"Humidity of the extract air – basis for humidity control.",
+ 23628:"Air quality of the extract air (odours/pollutants, VOC).",
+ 28940:"CO₂ content of the room air – indicator of stale air.",
+ 23634:"Output of the exhaust-air fan (actual air volume; discharges the used air to the outside).",
+}
+KEEPALIVE_LABEL_EN = {
+    "Eingang Ext. Konstantanforderung Heizen → AUS": "Input ext. constant demand heating → OFF",
+    "Eingang Ext. Konstantanforderung Kühlen → AUS": "Input ext. constant demand cooling → OFF",
+    "Eingang Umschaltung Heizen/Kühlen → AUS": "Input heating/cooling changeover → OFF",
+    "Regelstrategie 3 (Konstant) — redundant, schreibt auch Loxone": "Control strategy 3 (constant) — redundant, Loxone writes it too",
+}
+FEATURE_JS_EN = [
+    ("'Eingang '+dp+' abschalten?\\n\\nDieser Eingang hält die bus-getriebene Steuerung. Abschalten nur für Tests – sonst kann Heizen/Kühlen ausfallen.'",
+     "'Turn off input '+dp+'?\\n\\nThis input keeps the bus-driven control. Turn off only for tests – otherwise heating/cooling may fail.'"),
+    ("'Keepalive wirklich abschalten?\\n\\nOhne Keepalive driften die bus-getriebenen Einstellungen evtl. weg – die relais-freie Heiz-/Kühlsteuerung kann ausfallen. Nur für Tests!'",
+     "'Really turn off keepalive?\\n\\nWithout keepalive the bus-driven settings may drift – relay-free heating/cooling control can fail. Tests only!'"),
+    ("'\u2713 gespeichert'", "'\u2713 saved'"),
+    ("'Fehler: '", "'Error: '"),
+]
 TR_LABEL = {
  "Wärmepumpe":"Heat pump","Heizung & Kühlung":"Heating & Cooling","Warmwasser":"Hot water","Wohnraumlüftung":"Ventilation",
  "Betrieb & Stufen":"Operation & levels",
@@ -188,14 +268,15 @@ def tl(s):
     return L(s, TR_LABEL.get(s))
 
 def desc(reg, name="", unit="", writable=None):
-    d = DESC.get(reg)
+    en = curlang() == "en"
+    d = (DESC_EN.get(reg) if en else None) or DESC.get(reg)
     if d: return d
     parts = []
     if name: parts.append(f"{name}.")
-    parts.append(f"Hoval-Datenpunkt, Modbus-Register {reg}")
-    if unit: parts.append(f"Einheit: {unit}")
+    parts.append(f"Hoval data point, Modbus register {reg}" if en else f"Hoval-Datenpunkt, Modbus-Register {reg}")
+    if unit: parts.append(("Unit: " if en else "Einheit: ") + str(unit))
     if writable in (True, 1, "Yes", "yes", "Y", "y", "true", "True", "WAHR"):
-        parts.append("über Loxone schreibbar")
+        parts.append("writable via Loxone" if en else "über Loxone schreibbar")
     return " · ".join(parts)
 
 def regmap():
@@ -433,9 +514,9 @@ def read_all(regs):
 
 def fmt(raw, unit, dec, signed):
     if raw is None: return "—", "muted"
-    if unit == "ST_HC":  return ST_HC.get(raw, f"Code {raw}"), ("bad" if raw == 12 else "ok")
-    if unit == "ST_DHW": return ST_DHW.get(raw, f"Code {raw}"), ("bad" if raw == 5 else "ok")
-    if unit == "ST_HP":  return ST_HP.get(raw, f"Code {raw}"), "ok"
+    if unit == "ST_HC":  return st_txt(ST_HC, ST_HC_EN, raw), ("bad" if raw == 12 else "ok")
+    if unit == "ST_DHW": return st_txt(ST_DHW, ST_DHW_EN, raw), ("bad" if raw == 5 else "ok")
+    if unit == "ST_HP":  return st_txt(ST_HP, ST_HP_EN, raw), "ok"
     if unit == "PWRSET":
         # reg 18767: S16/10. -127,0 = Ungueltig-Marker, -100,0 = gueltig "fordert nichts an"
         v = (raw - 65536 if raw > 32767 else raw) / 10.0
@@ -811,7 +892,7 @@ class H(http.server.BaseHTTPRequestHandler):
         elif p == "/register": body, rf, act = self.register(), False, "register"
         elif p in ("/integration","/loxone","/homeassistant","/anleitung"): body, rf, act = self.integration() + self.stats_section() + self.mcp_section() + self.netz_section() + self.anleitung().replace('<h1>', '<h2 class="sec" style="font-size:1.35rem;margin-top:2.2rem">', 1).replace('</h1>', '</h2>', 1), False, "integration"
         elif p == "/sicherheit": body, rf, act = self.sicherheit(), False, "sicherheit"
-        elif p == "/verlauf": body, rf, act = verlauf_page(), False, "verlauf"
+        elif p == "/verlauf": body, rf, act = verlauf_page(curlang()), False, "verlauf"
         else:                body, rf, act = self.home(), False, "home"
         out = page(act.title(), act, body, rf, path=p).encode("utf-8")
         self.send_response(200); self.send_header("Content-Type","text/html; charset=utf-8")
@@ -1089,20 +1170,20 @@ function stoggle(on){
     # ---------- Feature-Schalter ----------
     FEATURES_F = "/home/admin/hoxpi-features.json"
     FEAT_META = [
-        ("watch","🚨",L("Störungs-Wächter & Takt-Alarm","Fault watch & cycle alarm"),
-         L("Meldet Störungen (Fehlercode, Hoch-/Niederdruck, Inverter), Warmwasser-Ausfall und Verdichter-Kurztakten sofort an Home Assistant, Logdatei und optional Webhook.",
+        ("watch","🚨",("Störungs-Wächter & Takt-Alarm","Fault watch & cycle alarm"),
+         ("Meldet Störungen (Fehlercode, Hoch-/Niederdruck, Inverter), Warmwasser-Ausfall und Verdichter-Kurztakten sofort an Home Assistant, Logdatei und optional Webhook.",
            "Reports faults (error code, high/low pressure, inverter), hot-water failure and compressor short-cycling instantly to Home Assistant, a log file and an optional webhook."),False),
-        ("mqtt_ha","🏠",L("Home Assistant (MQTT)","Home Assistant (MQTT)"),
-         L("Stellt alle Werte + Steuerung automatisch in Home Assistant bereit (MQTT-Auto-Discovery). Ausschalten, wenn du kein Home Assistant nutzt.",
+        ("mqtt_ha","🏠",("Home Assistant (MQTT)","Home Assistant (MQTT)"),
+         ("Stellt alle Werte + Steuerung automatisch in Home Assistant bereit (MQTT-Auto-Discovery). Ausschalten, wenn du kein Home Assistant nutzt.",
            "Publishes all values + controls to Home Assistant automatically (MQTT auto-discovery). Turn off if you don't use Home Assistant."),False),
-        ("cop_filter","📈",L("COP-Plausibilitätsfilter","COP plausibility filter"),
-         L("Verwirft unplausible COP-Ausreißer (Auslese-Artefakte) in Statistik und Home Assistant.",
+        ("cop_filter","📈",("COP-Plausibilitätsfilter","COP plausibility filter"),
+         ("Verwirft unplausible COP-Ausreißer (Auslese-Artefakte) in Statistik und Home Assistant.",
            "Discards implausible COP outliers (read artifacts) in statistics and Home Assistant."),False),
-        ("backup","💾",L("Automatisches Backup","Automatic backup"),
-         L("Sichert nächtlich alle Skripte & Configs versioniert (die letzten 14 Stände).",
+        ("backup","💾",("Automatisches Backup","Automatic backup"),
+         ("Sichert nächtlich alle Skripte & Configs versioniert (die letzten 14 Stände).",
            "Backs up all scripts & configs nightly, versioned (last 14)."),False),
-        ("keepalive","⚙️",L("Bus-Ansteuerung (Keepalive)","Bus control (keepalive)"),
-         L("Hält Regelstrategie 3 und die bus-getriebene Konstantanforderung (Eingänge 30-046/057/066 = AUS). Nötig für die relais-freie Heiz-/Kühlsteuerung über Loxone.",
+        ("keepalive","⚙️",("Bus-Ansteuerung (Keepalive)","Bus control (keepalive)"),
+         ("Hält Regelstrategie 3 und die bus-getriebene Konstantanforderung (Eingänge 30-046/057/066 = AUS). Nötig für die relais-freie Heiz-/Kühlsteuerung über Loxone.",
            "Keeps control strategy 3 and the bus-driven constant demand (inputs 30-046/057/066 = OFF). Required for relay-free heating/cooling control via Loxone."),True),
     ]
     WATCH_CONF_F = "/home/admin/hoval-watch/config.json"
@@ -1272,6 +1353,7 @@ function stoggle(on){
             return "", False
         rows=[]
         for key,icon,title,desc,crit in self.FEAT_META:
+            title = L(*title); desc = L(*desc)
             on = bool(feats.get(key, {}).get("enabled", True))
             sline, alarm = stat(key)
             pill_bg = "#fdeaea" if alarm else ("#eafaf1" if on else "#f0f1f4")
@@ -1302,6 +1384,7 @@ function stoggle(on){
                 for dpk in ("30046", "30057", "30066", "3032"):
                     cd = kd.get(dpk, {}); don = bool(cd.get("enabled", True))
                     lbl = cd.get("label", "dp" + dpk); crit_dp = dpk != "3032"
+                    if curlang() == "en": lbl = KEEPALIVE_LABEL_EN.get(lbl, lbl)
                     subs.append(
                         '<div style="display:flex;align-items:center;gap:.6rem;padding:.35rem 0;border-bottom:1px dashed #eee">'
                         '<code style="color:#c2185b">' + dpk + '</code>'
@@ -1340,6 +1423,8 @@ function ftoggle(key,on,crit){
  }).catch(function(e){alert('Fehler: '+e);});
 }
 </script>"""
+        if curlang() == "en":
+            for _de, _en in FEATURE_JS_EN: js = js.replace(_de, _en)
         return ('<div class="domain"><div class="dh" style="background:#c2185b;background-image:linear-gradient(90deg,rgba(255,255,255,.15),rgba(255,255,255,0))"><span class="ic">🎛️</span><h2>'
                 + L("Funktionen ein-/ausschalten","Enable / disable functions") + '</h2></div><div class="dbody">'
                 + '<p>' + L("Jede Zusatzfunktion lässt sich hier abschalten. Wirkt sofort (spätestens beim nächsten Prüf-Zyklus des Dienstes).",
@@ -1553,11 +1638,11 @@ function apost(url, body, msgid){
                         continue
                     raw = vals.get(reg)
                     if reg in ENUM:
-                        txt = ENUM[reg].get(raw, f"Code {raw}") if raw is not None else "—"
+                        txt = enum_txt(reg, raw) if raw is not None else "—"
                         cls = "val" if raw is not None else "muted"
                     else:
                         txt, cls = fmt(raw, unit, dec, signed)
-                    d = html.escape(desc(reg, name, unit))
+                    d = html.escape(desc(reg, tl(name), unit))
                     _z = get_labels().get(str(reg))
                     _nm = html.escape(tl(name)) + (f'<span class="ze">{html.escape(_z)}</span>' if _z else "")
                     out.append(f'<div class="card" title="{d}"><div class="n">{_nm}</div>'
@@ -1656,6 +1741,68 @@ das Herunterladen + Ablegen der Datei ist der schnellste offiziell unterstützte
 Falls deine Pi-IP nicht <code>192.168.1.50</code> ist, in der Datei oben den <code>host:</code> anpassen.</div>"""
 
     def anleitung(self):
+        if curlang() == "en":
+            return self.anleitung_en()
+        return self.anleitung_de()
+
+    def anleitung_en(self):
+        return f"""<h1>Guide — installation &amp; integration</h1>
+<p>From wiring to a finished integration in Loxone or Home Assistant. To the outside, HoxPi behaves like an
+<b>original Hoval Modbus gateway</b> — which is why the official templates work 1:1.</p>
+
+<div class="domain"><div class="dh" style="background:#c2185b;background-image:linear-gradient(90deg,rgba(255,255,255,.15),rgba(255,255,255,0))"><span class="ic">🔌</span><h2>1 · Connect the hardware</h2></div><div class="dbody">
+<ul style="line-height:1.8">
+<li>Plug the USB-CAN adapter (DSD-TECH SH-C30G) into the Raspberry Pi.</li>
+<li>Connect the three CAN wires <b>in parallel</b> at the Hoval <b>WEZ module</b>, terminal „+ ⏚ H L"
+(the existing bus keeps running unchanged): <b>H = blue, L = orange, ⏚ = green</b>.</li>
+<li>The WEZ module carries the real <b>TopTronic-E CAN</b> (50 kbit/s, 64 Ω terminated).
+<b>Not</b> terminal X4 — that is RS485, not CAN.</li>
+<li>Power the Pi (PoE splitter on the network cable or a USB power supply).</li>
+</ul></div></div>
+
+<div class="domain"><div class="dh" style="background:#e2001a;background-image:linear-gradient(90deg,rgba(255,255,255,.15),rgba(255,255,255,0))"><span class="ic">💻</span><h2>2 · Software / Pi</h2></div><div class="dbody">
+<p>Several services with autostart run on the Pi: <code>can0</code> (CAN interface), the
+<b>HoxPi bridge</b> (CAN → Modbus-TCP :502), this dashboard (port 80) and optionally exporter/Prometheus/Grafana for statistics. Once set up,
+everything restarts by itself after every power cut.</p>
+<div class="note">Pi reachable on the network at <code>192.168.1.50</code> · dashboard: simply this page.
+Bridge status: running &amp; reading live.</div></div></div>
+
+<div class="domain"><div class="dh" style="background:#69b41e;background-image:linear-gradient(90deg,rgba(255,255,255,.15),rgba(255,255,255,0))"><span class="ic">🟩</span><h2>3 · Connect Loxone</h2></div><div class="dbody">
+<p>In <b>Loxone Config</b> create a <b>Modbus TCP device</b> → IP <code>192.168.1.50</code>, port <code>502</code>.
+Then add the matching Hoval <b>templates</b> from the <b>Loxone Library</b> (that is what the ready-made
+device integrations are called there). Which template you need depends on the part of the system:</p>
+<table><tr><th>Part of the system</th><th>Loxone template</th><th>when to use</th></tr>
+<tr><td>Heat pump<br>(heating, cooling, hot water)</td>
+<td><a href="https://library.loxone.com/detail/template-hoval-at-769/overview" target="_blank">Hoval Heating &amp; Cooling</a></td>
+<td><b>always</b> — this is the main integration: flow temperatures of the heating circuits and hot water are controlled through it.</td></tr>
+<tr><td>Ventilation<br>(HomeVent)</td>
+<td><a href="https://library.loxone.com/detail/hoval-template-884/overview" target="_blank">Hoval Ventilation</a></td>
+<td>if the <b>ventilation</b> should be visible/controllable in Loxone (stages, humidity, temperatures).</td></tr>
+<tr><td>Energy management</td>
+<td><a href="https://library.loxone.com/detail/hoval-energy-management-1845/overview" target="_blank">Hoval Energy Management</a></td>
+<td><b>optional</b> — only if Loxone should run the heat pump energy-optimised (e.g. PV surplus, load shifting).</td></tr>
+</table>
+<div class="note" style="margin-top:.8rem">For this system: <b>Heating &amp; Cooling</b> (heat pump) + <b>Ventilation</b> (ventilation unit).
+Energy Management only if needed. Each template ships with a (German) „Praxisanleitung Hoval-Loxone" in its download area.</div>
+<div class="note ok" style="margin-top:.6rem">The templates expect a <b>Hoval Modbus gateway</b> — exactly what HoxPi emulates.
+Register numbers match the Hoval table exactly, so they fit without any adjustment.
+Values are <b>raw values</b> (e.g. °C ×10) — the template scales them itself. More on this in the Loxone section above.</div></div></div>
+
+<div class="domain"><div class="dh" style="background:#41bdf5;background-image:linear-gradient(90deg,rgba(255,255,255,.18),rgba(255,255,255,0))"><span class="ic">🏠</span><h2>4 · Connect Home Assistant</h2></div><div class="dbody">
+<p>Download the ready-made configuration in the Home Assistant section above
+(<code>hoxpi.yaml</code>), put it into the <code>packages</code> folder, restart HA — all sensors
+appear automatically and are already scaled (°C, %, kW …).</p></div></div>
+
+<div class="domain"><div class="dh" style="background:#1c2531;background-image:linear-gradient(90deg,rgba(255,255,255,.12),rgba(255,255,255,0))"><span class="ic">💡</span><h2>5 · Tips &amp; notes</h2></div><div class="dbody">
+<ul style="line-height:1.8">
+<li>The CAN tap is <b>passive &amp; parallel</b> — the existing system stays untouched.</li>
+<li>HoxPi starts <b>read-only</b>. Control (changing setpoints) can be enabled selectively,
+only for sensible, verified values.</li>
+<li>Different Pi IP? Then adjust <code>host:</code> in the Home Assistant file and the device IP in Loxone.</li>
+<li>Everything stays <b>local</b>, no cloud access needed.</li>
+</ul></div></div>"""
+
+    def anleitung_de(self):
         return f"""<h1>Anleitung — Installation & Anbindung</h1>
 <p>Von der Verkabelung bis zur fertigen Anbindung in Loxone oder Home Assistant. HoxPi verhält sich
 nach außen wie ein <b>originaler Hoval-Modbus-Gateway</b> — deshalb funktionieren die offiziellen Vorlagen 1:1.</p>
