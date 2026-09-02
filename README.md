@@ -51,6 +51,8 @@ Live dashboard on the Pi (port 80) — no cloud, German/English:
 
 CAN wiring: tap the bus **in parallel** at the Hoval **WEZ module**, terminal "+ ⏚ H L" (H/L/GND). The existing bus keeps running — HoxPi listens passively and polls politely. **Do not** use terminal X4 (that is RS-485, not CAN).
 
+> **ESP32 instead of a Pi?** [`esp32-gateway/`](esp32-gateway/README.md) holds an ESP-IDF port of the bridge core (CAN ↔ Modbus-TCP :502, same register map, same write safeguards) for PoE boards like Olimex ESP32-EVB or Waveshare ESP32-S3-POE-ETH. Protocol core is verified against this bridge on the host (`test/`); not yet run on hardware.
+
 ## Install
 
 **Quick install** (Raspberry Pi OS / Debian, flash with the Raspberry Pi Imager and enable SSH there, then):
@@ -148,6 +150,8 @@ Das Dashboard läuft direkt am Pi (Port 80) — ohne Cloud, Deutsch/Englisch ums
 | ![Assistent](docs/screenshots/assistent.jpg) | |
 
 ## Installation
+
+> **ESP32 statt Pi?** [`esp32-gateway/`](esp32-gateway/README.md) enthält eine ESP-IDF-Portierung des Bridge-Kerns (CAN ↔ Modbus-TCP :502, gleiche Registerkarte, gleiche Schreibsicherungen) für PoE-Boards wie Olimex ESP32-EVB oder Waveshare ESP32-S3-POE-ETH. Protokollkern am Host gegen diese Bridge verifiziert (`test/`); noch nicht auf Hardware gelaufen.
 
 Ausführliche Schritt-für-Schritt-Anleitung: **[INSTALL.md](INSTALL.md)**. Kurzform:
 

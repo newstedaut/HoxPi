@@ -1,0 +1,4 @@
+## IDF Component Manager — esp-modbus (Modbus-TCP-Slave). API im Code: esp-modbus 1.x
+dependencies:
+  espressif/esp-modbus: "^1.0.15"
+  idf: ">=5.3"
