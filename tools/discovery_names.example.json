@@ -1,0 +1,51 @@
+{
+  "_hinweis": "Kuratierte Namen fuer Neufunde des Discovery-Scanners. Schluessel = \"fg-fn-dp\" wie in discovery_found.json. Kopie als discovery_names.json neben discovery_export.py ablegen. Nur Eintraege mit \"verified\": true werden ohne --all-new exportiert. type/decimal/unit im Stil von hoval_datapoints (U8/S16/U32/STR, decimal = Nachkommastellen, unit z. B. C/%/bar oder leer).",
+  "_verifiziert_heisst": "Wert per CAN-GET gelesen UND gegen das Bedienteil/einen bekannten Modbus-Wert gegengeprueft (Anzeige stimmt). Reine Vermutungen bleiben verified=false.",
+
+  "1-0-7014": {
+    "name_de": "Kuehlbetrieb Freigabe (Par. 07-014)",
+    "name_en": "Cooling operation release (par. 07-014)",
+    "type": "U8", "decimal": 0, "unit": "",
+    "verified": true,
+    "note": "Not in Hoval's Modbus datapoint list; on the controller display it is shown as a bare number. Verified on a UltraSource B comfort C17 / TopTronic E: CAN GET returns the same value as the display. Enum meanings not fully known."
+  },
+  "1-0-4005": {
+    "name_de": "Heizkreis 1 Name (Klartext)",
+    "name_en": "Heating circuit 1 name (text)",
+    "type": "STR", "decimal": 0, "unit": "",
+    "verified": true,
+    "note": "ASCII string (up to 13 bytes seen). Returns the circuit name exactly as entered on the TopTronic E display. First text datapoint found on the CAN bus; only answers on fg=1/fn=0 so far."
+  },
+  "1-0-505": {
+    "name_de": "Heizkreis 1 Betriebswahl Klartext (Vermutung)",
+    "name_en": "Heating circuit 1 operating mode as text (assumption)",
+    "type": "STR", "decimal": 0, "unit": "",
+    "verified": false,
+    "note": "ASCII string, e.g. 'Konstant' while Modbus 1478 (HC1 operating mode) = 4. Probably the display text of the selected operating mode, not of the status. Not yet confirmed by switching the mode."
+  },
+  "1-0-3058": {
+    "name_de": "unbekannt (Sollwertreihe 3051/3053/3054/3056)",
+    "name_en": "unknown (setpoint series 3051/3053/3054/3056)",
+    "type": "S16", "decimal": 1, "unit": "C",
+    "verified": false,
+    "note": "Answers to GET with 0. Continues the fg=1 room-setpoint series (3051 normal heating, 3053 setback heating, 3054 normal cooling, 3056 eco cooling). Meaning not confirmed."
+  },
+  "1-0-20125": {
+    "name_de": "unbekannt", "name_en": "unknown",
+    "type": "U8", "decimal": 0, "unit": "",
+    "verified": false,
+    "note": "Answers with 0 on HC1, HC2 and DHW (fg=2) alike - probably a generic per-circuit status byte."
+  },
+  "1-1-20125": {
+    "name_de": "unbekannt", "name_en": "unknown",
+    "type": "U8", "decimal": 0, "unit": "",
+    "verified": false,
+    "note": "See fg=1/fn=0/dp=20125."
+  },
+  "2-0-20125": {
+    "name_de": "unbekannt", "name_en": "unknown",
+    "type": "U8", "decimal": 0, "unit": "",
+    "verified": false,
+    "note": "See fg=1/fn=0/dp=20125."
+  }
+}
