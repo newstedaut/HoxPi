@@ -49,6 +49,7 @@ h2{font-size:1.15rem;color:#e2001a;margin:1.4rem 0 .4rem}
 <p class="sub">In wenigen Schritten die passende HoxPi-Konfiguration erzeugen — für deine Anlage.</p>
 <div class="dry" id="drybanner">🧪 <b>Trockentest:</b> Dieser Assistent läuft komplett im Browser und schreibt <b>nichts</b> auf die Anlage. Am Ende bekommst du die fertige Konfiguration zum Ansehen/Kopieren.</div>
 
+<div class="ok" id="prefillnote" style="display:none;margin-bottom:1rem"></div>
 <div class="prog" id="prog"></div>
 
 <div class="card">
@@ -225,6 +226,7 @@ function buildSummary(){
  todo.push(A.ha==='yes'?'MQTT-Dienst aktiv → HA-Entitäten erscheinen automatisch.':'MQTT-Dienst bleibt aus.');
 
  var conf={};for(var k in feats)conf[k]=feats[k];
+ conf.assistent={hk:A.hk,mode:A.mode,persist:A.persist,c066:A.c066,c066l:A.c066l,ha:A.ha,stand:new Date().toISOString().slice(0,16)};
  var json=JSON.stringify(conf,null,1);
 
  var LIVE=location.protocol.indexOf('http')===0;
@@ -258,8 +260,32 @@ function applyj(){
  }).catch(function(e){el.style.color='#c62828';el.textContent='Netzwerkfehler: '+e;});
 }
 function copyj(){navigator.clipboard.writeText(window._json||'').then(function(){alert('JSON in die Zwischenablage kopiert.');});}
+function setRadio(k,v){var r=document.querySelector('.opts[data-k='+k+'] input[value="'+v+'"]');if(r){r.checked=true;r.onchange();}}
+function prefill(c){
+ // Rueckwaerts-Import: bestehende hoxpi-features.json -> Antworten des Assistenten.
+ // Bevorzugt den Block "assistent" (ab 02.09.2026), sonst Ableitung aus den Schaltern.
+ var a=c.assistent||{}, kd=c.keepalive_dps||{}, src=c.assistent?'Assistent-Antworten':'Schaltern abgeleitet';
+ var ex=[];['watch','backup','cop_filter'].forEach(function(k){if(!c[k]||c[k].enabled!==false)ex.push(k);});
+ document.querySelectorAll('.opts[data-k=extras] input').forEach(function(x){x.checked=ex.indexOf(x.value)>=0;x.closest('.opt').classList.toggle('sel',x.checked);});
+ A.extras=ex;
+ var ha=a.ha||((c.mqtt_ha&&c.mqtt_ha.enabled===false)?'no':'yes'); setRadio('ha',ha);
+ var mode=a.mode, persist=a.persist, c066=a.c066, c066l=a.c066l||'';
+ if(!mode){
+  if(kd['30046']||kd['30057']){mode='busfree';persist='yes';}
+  else if(kd['30066']&&+kd['30066'].value>0){mode='contact';c066=kd['30066'].value;c066l=(kd['30066'].label||'').replace(/^.*→\s*/,'');if(/^Wert /.test(c066l))c066l='';}
+  else if(c.keepalive&&c.keepalive.enabled===false){mode='busfree';persist='no';}
+ }
+ if(mode){setRadio('mode',mode);}
+ if(mode==='busfree'&&persist){setRadio('persist',persist);}
+ if(mode==='contact'&&c066!==null&&c066!==undefined){var i=document.getElementById('c066');i.value=c066;A.c066=String(c066);document.getElementById('c066l').value=c066l;A.c066l=c066l;}
+ var hk=a.hk||1; var b=document.querySelector('.num[data-k=hk] button[data-v="'+hk+'"]'); if(b)b.onclick();
+ var n=document.getElementById('prefillnote'); n.style.display='';
+ n.innerHTML='↩️ <b>Vorbelegt</b> aus der bestehenden Konfiguration dieses HoxPi'+(c._stand?' (Stand '+c._stand+')':'')+', aus '+src+(a.hk?'':' — <b>Heizkreis-Anzahl bitte prüfen</b>')+'. Einfach durchklicken und anpassen; geschrieben wird erst am Ende.';
+ paint();
+}
 paint();
 if(location.protocol.indexOf('http')===0){
+ fetch('/api/features',{cache:'no-store'}).then(function(r){return r.json();}).then(function(c){if(c&&Object.keys(c).length>1)prefill(c);}).catch(function(){});
  document.getElementById('drybanner').innerHTML='🔧 <b>Live:</b> Dieser Assistent läuft direkt auf deinem HoxPi. Beim Durchklicken wird <b>nichts</b> geschrieben — erst der Knopf „Auf diesem HoxPi übernehmen" am Ende speichert die Konfiguration (bei aktiver 2FA nur mit Anmeldung).';
  document.getElementById('assfoot').innerHTML='HoxPi · offenes Gateway für Hoval® TopTronic® E · <a href="/">zurück zum Dashboard</a>';
 }
