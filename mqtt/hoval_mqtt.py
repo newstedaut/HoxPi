@@ -50,7 +50,14 @@ SENSORS = [
     ("sg_status",   27537, "SmartGrid Status",     None, None,          SG_STATUS),
     ("kuehlventil", 19870, "Kuehlventil UKA",      None, None,          {0:"zu",1:"offen"}),
     ("jaz",         27467, "Jahresarbeitszahl",    None, None,          None),
+    ("leistungssollwert", 18767, "Leistungs-Sollwert WEZ", "%", None, None),
+    ("anforderung",       18768, "Anforderung WEZ",       None, None, {0: "nein", 100: "ja"}),
 ]
+# 18767: Leistungs-Sollwert des Waermeerzeugers, S16 /10, -100..+100 %.
+#   -100.0 = kein Bedarf (unterer Anschlag des Reglerausgangs, gueltiger Wert)
+#   -127.0 = UNGUELTIG -> wird unten als "unknown" publiziert, nie als Zahl.
+# 18768: binaeres Anforderungs-Flag (nur 0 oder 100), trotz Hoval-Name "0-100%".
+INVALID_SETPOINT = -127.0
 COP_HI, COP_LO = 31667, 31668
 
 # ---------- Steuerbare Entities ----------
@@ -223,6 +230,9 @@ def main():
                 if enum is not None:
                     c.publish(f"{BASE}/{key}/state", enum.get(int(v), str(v)), retain=True)
                     c.publish(f"{BASE}/{key}/raw", int(v), retain=True)
+                elif reg == 18767 and float(v) == INVALID_SETPOINT:
+                    # Hoval meldet -127.0 = kein gueltiger Sollwert.
+                    c.publish(f"{BASE}/{key}/state", "unknown", retain=True)
                 else:
                     c.publish(f"{BASE}/{key}/state", v, retain=True)
             except Exception:
