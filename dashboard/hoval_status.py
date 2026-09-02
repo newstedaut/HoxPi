@@ -777,6 +777,19 @@ class H(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Disposition",'attachment; filename="hoxpi.yaml"')
             self.send_header("Content-Length", str(len(data)))
             self.end_headers(); self.wfile.write(data); return
+        if p == "/api/features":
+            # Bestehende Konfiguration fuer den Assistenten (Rueckwaerts-Import). Nur Schalter/Labels, nichts Geheimes.
+            import os as _os
+            try:
+                with open(self.FEATURES_F, encoding="utf-8") as f: cur = json.load(f)
+                if not isinstance(cur, dict): cur = {}
+                try: cur["_stand"] = datetime.datetime.fromtimestamp(_os.path.getmtime(self.FEATURES_F)).strftime("%d.%m.%Y %H:%M")
+                except Exception: pass
+            except Exception: cur = {}
+            data = json.dumps(cur, ensure_ascii=False).encode("utf-8")
+            self.send_response(200); self.send_header("Content-Type","application/json; charset=utf-8")
+            self.send_header("Cache-Control","no-store")
+            self.send_header("Content-Length", str(len(data))); self.end_headers(); self.wfile.write(data); return
         if p == "/assistent":
             import os as _os
             for _ap in ("/home/admin/hoval-bridge/hoxpi_assistent.html", "/opt/hoxpi/hoxpi_assistent.html"):
@@ -1165,13 +1178,20 @@ function stoggle(on){
                 + L("Speichern", "Save") + '</button><span id="wc_msg" style="color:#d6202f;font-size:.85rem"></span>'
                 '<span style="color:#8893a2;font-size:.78rem">' + L("wirkt binnen 2 Min. (Cron)", "takes effect within 2 min (cron)") + '</span></div></div>')
 
+    def api_features_apply(self):
         # Komplette hoxpi-features.json vom Inbetriebnahme-Assistenten uebernehmen (2FA-geschuetzt via do_POST-Guard)
         import os as _o
         try:
             body = self._read_json()
             if not isinstance(body, dict) or not body:
                 self.json_out({"ok": False, "fehler": "leere/ungueltige Konfiguration"}); return
-            allowed = {"watch", "mqtt_ha", "cop_filter", "backup", "keepalive", "keepalive_dps"}
+            allowed = {"watch", "mqtt_ha", "cop_filter", "backup", "keepalive", "keepalive_dps", "assistent"}
+            a = body.get("assistent")
+            if a is not None:
+                ok_keys = {"hk", "mode", "persist", "c066", "c066l", "ha", "stand"}
+                if not isinstance(a, dict) or any(k not in ok_keys for k in a) or len(json.dumps(a)) > 600:
+                    self.json_out({"ok": False, "fehler": "ungueltiger Block 'assistent'"}); return
+                body["assistent"] = {k: (v if isinstance(v, (int, float, bool)) or v is None else str(v)[:80]) for k, v in a.items()}
             bad = [k for k in body if k not in allowed]
             if bad:
                 self.json_out({"ok": False, "fehler": "unbekannte Schluessel: " + ",".join(bad)}); return

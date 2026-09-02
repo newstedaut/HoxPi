@@ -122,7 +122,7 @@ HoxPi liest den CAN-Bus einer Hoval® TopTronic® E-Anlage (Wärmepumpe, Wohnrau
 - **Verlaufs-Graphen** (`/verlauf`, 24h/7d/30d) und Karte „Neu entdeckte Datenpunkte“ (Katalogabgleich) im Dashboard
 - **Automatisches Backup**: nächtliche, versionierte Sicherung aller Skripte & Configs
 - **Funktions-Schalter** (Dashboard → *Sicherheit*): jede Zusatzfunktion einzeln ein-/ausschaltbar (inkl. jedem Keepalive-Eingang), hinter 2FA
-- **Inbetriebnahme-Assistent** (`assistant/hoxpi_assistent.html`): geführtes, browserbasiertes Setup, erzeugt die passende `hoxpi-features.json` (Trockentest, schreibt nichts)
+- **Inbetriebnahme-Assistent** (`assistant/hoxpi_assistent.html`): geführtes, browserbasiertes Setup, erzeugt die passende `hoxpi-features.json` (Trockentest, schreibt nichts); live am Pi (`/assistent`) lädt er die bestehende Konfiguration und belegt alle Schritte vor, der Knopf „Übernehmen“ schreibt sie (2FA)
 
 ## Screenshots
 
