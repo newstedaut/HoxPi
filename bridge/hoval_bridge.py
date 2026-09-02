@@ -16,6 +16,15 @@ Stand: Skelett, gegen Live-Bus noch zu verifizieren (HV-Adressierung, 32-bit-Lay
 Modbus-Adress-Offset 0/1-basiert je nach Loxone-Vorlage).
 """
 import argparse, json, logging, os, struct, threading, time
+import re
+
+# 01.09.2026: Hovals Datenpunktliste benennt die 2. Haelfte eines 32-Bit-Wertes
+# mal "..._low" (Unterstrich) und mal "... low" (Leerzeichen, teils mit
+# Trailing Space). Der alte endswith("_low") erwischte nur die Unterstrich-
+# Variante -> 31 von 116 32-Bit-Registern bekamen in BEIDE Haelften denselben
+# (auf das High-Word gekuerzten) Wert. Belegt an den Laufzeitzaehlern:
+# CAN-Rohwert 60-7-1033 = 0x00018CB0 (=10155,2 h), Modbus lieferte 0,1 h.
+_LOW_SUFFIX = re.compile(r"[_ ]low$", re.I)
 
 log = logging.getLogger("hoval-bridge")
 
@@ -157,6 +166,7 @@ def build_modbus(regmap, on_write):
 # ---- CAN-Handling -----------------------------------------------------------
 class Bridge:
     def __init__(self, args):
+        self._pair_cache = {}
         self.args = args
         self.regmap = RegMap(args.registers)
         self.bus = None
@@ -227,6 +237,50 @@ class Bridge:
                     data = data[:-2]   # CRC abschneiden
                 self._parse_message(bytes(data))
 
+    def _effective_rows(self, fg, fn, dp, regs):
+        """32-Bit-Paare STRUKTURELL erkennen statt ueber den Namen.
+
+        01.09.2026: Hovals Datenpunktliste benennt die zweite Haelfte eines
+        32-Bit-Wertes uneinheitlich - mal "_low", mal " low", und bei
+        dp51/dp55/dp1029/dp1033 heissen BEIDE Haelften "_high" bzw. tragen
+        gar kein Suffix. Namensbasiertes Ueberspringen liess dort beide
+        Zeilen durch: die zweite schrieb ihr High-Wort nach reg+1 und ihr
+        Low-Wort nach reg+2 - also in ein FREMDES Register
+        (27487->27488/27489, 31658->31659/31660, 31662->31663/31664).
+        Jetzt: gleiche (unit_id,fg,fn,dp) + direkt aufeinanderfolgende
+        reg-Nummern = ein Paar, nur die erste Zeile (=high) verarbeiten.
+        Verifiziert gegen registers.json: das Low-Wort steht nie zuerst.
+        Der Namenscheck bleibt zusaetzlich fuer Einzelgaenger erhalten.
+        """
+        key = (fg, fn, dp)
+        cached = self._pair_cache.get(key)
+        if cached is not None:
+            return cached
+        skip = set()
+        by_unit = {}
+        for r in regs:
+            if (r["type"] or "").upper() in ("U32", "S32"):
+                by_unit.setdefault(r.get("unit_id"), []).append(r)
+        for rows in by_unit.values():
+            rows.sort(key=lambda x: x["reg"])
+            i = 0
+            while i < len(rows) - 1:
+                if rows[i + 1]["reg"] == rows[i]["reg"] + 1:
+                    skip.add(id(rows[i + 1]))
+                    i += 2
+                else:
+                    i += 1
+        out = []
+        for r in regs:
+            if id(r) in skip:
+                continue
+            if ((r["type"] or "").upper() in ("U32", "S32")
+                    and _LOW_SUFFIX.search((r.get("name") or "").strip())):
+                continue
+            out.append(r)
+        self._pair_cache[key] = out
+        return out
+
     def _parse_message(self, raw):
         if len(raw) < 5:
             return
@@ -238,12 +292,8 @@ class Bridge:
         regs = self.regmap.by_dp.get((fg, fn, dp))
         if not regs:
             return
-        for r in regs:
+        for r in self._effective_rows(fg, fn, dp, regs):
             t = (r["type"] or "").upper()
-            # 32-bit: an das "_high"-Register beide Woerter (high@reg, low@reg+1) schreiben;
-            # das "_low"-Register dabei ueberspringen (wird mitgeschrieben).
-            if t in ("U32", "S32") and (r.get("name") or "").endswith("_low"):
-                continue
             v = decode_value(t, val)
             if v is None:
                 continue
