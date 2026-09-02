@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 # Hoval-Pi Dashboard v4 - Hoval-Branding (hell, rot), Bereiche klar getrennt
-import http.server, socketserver, html, json, datetime, time as _time, threading
+import http.server, socketserver, html, json, datetime, time as _time, threading, os
+try:
+    from verlauf_module import verlauf_page, verlauf_api_handler as _vah
+except ImportError:
+    verlauf_page = lambda: "<p>verlauf_module.py fehlt</p>"
+    _vah = lambda q: (503, b'{"error":"module missing"}', "application/json")
 from urllib.parse import urlparse, parse_qs
 
 REG_PATH = "/home/admin/hoval-bridge/registers.json"
@@ -50,6 +55,8 @@ DOMAINS = [
      (18738,"Wasserdruck","bar",1,True),
      (18742,"Rücklauf Wärmeerzeuger","°C",1,True),
      (1525,"WEZ-Temperatur","°C",1,True),
+     (18767,"Leistungs-Sollwert","PWRSET",1,True),
+     (18768,"Anforderung an Wärmeerzeuger","REQ",0,False),
    ]),
  ]),
  ("Heizung & Kühlung", "🌡️", [
@@ -117,6 +124,8 @@ DESC = {
  18738:"Wasserdruck im Heizkreis. Normal ca. 1–2 bar. Zu niedrig → Wasser nachfüllen.",
  18742:"Temperatur des zur Wärmepumpe zurückfließenden Heizwassers.",
  1525:"Temperatur am Wärmeerzeuger selbst (interner Vorlauf der Wärmepumpe).",
+ 18767:"Leistung, die die Regelung gerade vom Wärmeerzeuger anfordert (aktiver Kanal: Heizen, Kühlen oder Warmwasser). Steigt kurz vor einem Verdichterstart an — Frühindikator, aber kein Startkriterium: die Startwerte streuen stark. „keine Anforderung“ = −100 %, „—“ = Regler meldet ungültig (−127).",
+ 18768:"Zeigt, ob überhaupt eine Anforderung an den Wärmeerzeuger ansteht (ja/nein). Begleitwert zum Leistungs-Sollwert.",
  1478:"Gewählte Betriebsart des Heizkreises (Automatik, Komfort, Eco, Aus …).",
  1501:"Aktueller Zustand des Heizkreises (Heizen, Kühlen, Aus …).",
  1510:"Aktuell gemessene Raumtemperatur des Heizkreises.",
@@ -160,6 +169,7 @@ TR_LABEL = {
  "Außentemperatur":"Outdoor temperature","Betriebsstatus":"Operating status","Modulation Verdichter":"Compressor modulation",
  "Elektrische Leistung":"Electrical power","Heizleistung":"Heating power","Effizienz (Arbeitszahl)":"Efficiency (COP)",
  "Wasserdruck":"Water pressure","Rücklauf Wärmeerzeuger":"Return (heat generator)","WEZ-Temperatur":"Heat generator temp.",
+ "Leistungs-Sollwert":"Output setpoint","Anforderung an Wärmeerzeuger":"Demand on heat generator",
  "Betriebsart":"Operating mode","Status Heizkreis":"Heating circuit status","Raumtemperatur Ist":"Room temperature (actual)",
  "Raum-Sollwert":"Room setpoint","Vorlauf-Temperatur":"Flow temperature","Rücklauf-Temperatur":"Return temperature",
  "Sollwert Heizkreis":"Heating circuit setpoint","Sollwert Kühlmodus":"Cooling setpoint",
@@ -426,6 +436,16 @@ def fmt(raw, unit, dec, signed):
     if unit == "ST_HC":  return ST_HC.get(raw, f"Code {raw}"), ("bad" if raw == 12 else "ok")
     if unit == "ST_DHW": return ST_DHW.get(raw, f"Code {raw}"), ("bad" if raw == 5 else "ok")
     if unit == "ST_HP":  return ST_HP.get(raw, f"Code {raw}"), "ok"
+    if unit == "PWRSET":
+        # reg 18767: S16/10. -127,0 = Ungueltig-Marker, -100,0 = gueltig "fordert nichts an"
+        v = (raw - 65536 if raw > 32767 else raw) / 10.0
+        if v <= -120: return "—", "muted"
+        if v <= -99.5: return L("keine Anforderung", "no demand"), "muted"
+        return f"{v:.1f}".replace(".", ",") + " %", "val"
+    if unit == "REQ":
+        # reg 18768: U8, 0 = keine Anforderung, >0 = Anforderung aktiv
+        if raw == 0xFF: return "—", "muted"
+        return (L("ja", "yes"), "ok") if raw else (L("nein", "no"), "muted")
     if raw in (0xFFFF, 0x8000): return "—", "muted"
     if (not signed) and dec == 0 and raw == 0xFF: return "—", "muted"
     v = raw - 65536 if (signed and raw > 32767) else raw
@@ -587,7 +607,7 @@ def page(title, active, body, refresh=False, path="/"):
                                 ("register","/register",L("Register","Registers")),
                                 ("integration","/integration","Integration"),
                                 ("assistent","/assistent",L("Assistent","Wizard")),
-                                ("sicherheit","/sicherheit",L("Sicherheit","Security")),
+                                ("sicherheit","/sicherheit",L("Sicherheit","Security")),("verlauf","/verlauf",L("Verlauf","History")),
                                 ])
     sw = (f'<div class="langsw">'
           f'<a class="{"on" if lg=="de" else ""}" href="{path}?lang=de" title="Deutsch">{FLAG_DE}</a>'
@@ -626,6 +646,103 @@ def schema():
  <rect class="bx" x="693" y="130" width="170" height="60" rx="11" stroke="#41bdf5" stroke-width="2"/>
  <text class="ti" x="710" y="158">Home Assistant</text><text class="su" x="710" y="176">{L("Modbus-Integration","Modbus integration")}</text>
 </svg>"""
+
+
+# ---------- Discovery: neu entdeckte Datenpunkte ----------
+DISCOVERY_FOUND = "/home/admin/discovery_data/discovery_found.json"
+
+def _katalog_index():
+    """(fg,fn,dp) -> Registerzeile aus registers.json (nur unit_id 1, wie der Scanner)."""
+    try:
+        d = json.load(open(REG_PATH, encoding="utf-8"))
+    except Exception:
+        return {}
+    rows = d["registers"] if isinstance(d, dict) and "registers" in d else d
+    idx = {}
+    for r in rows:
+        try:
+            if int(r.get("unit_id", 1)) != 1:
+                continue
+            idx[(int(r["fg"]), int(r["fn"]), int(r["dp"]))] = r
+        except Exception:
+            pass
+    return idx
+
+def _disc_val(hexstr):
+    """Rohwert des Scanners ('0000397e') lesbar machen: hex, dezimal, /10."""
+    try:
+        h = (hexstr or "").strip()
+        n = int(h, 16)
+    except Exception:
+        return html.escape(str(hexstr)), ""
+    nbytes = max(1, len(h) // 2)
+    raw = bytes.fromhex(h) if len(h) % 2 == 0 else b""
+    # Textdatenpunkt? (z. B. 1-0-505 liefert ASCII "Konstant")
+    if len(raw) >= 3 and all(0x20 <= b <= 0x7E for b in raw):
+        return '"' + html.escape(raw.decode("ascii")) + '"', L("Text", "text")
+    # Sentinels des Reglers: nicht belegt / ungültig
+    if (nbytes == 1 and n == 0xFF) or (nbytes == 2 and n in (0xFFFF, 0x8000)):
+        return "0x" + h.upper(), "—"
+    if nbytes > 4:
+        return "0x" + h.upper(), ""
+    sv = n
+    if nbytes == 2 and n > 0x7FFF: sv = n - 0x10000
+    elif nbytes == 1 and n > 0x7F:  sv = n - 0x100
+    elif nbytes == 4 and n > 0x7FFFFFFF: sv = n - 0x100000000
+    hint = f"{sv}" + (f" · /10 = {sv/10.0:.1f}".replace(".", ",") if abs(sv) >= 10 else "")
+    return "0x" + h.upper(), hint
+
+def discovery_card():
+    """Karte mit den Funden des Register-Scanners; trennt NEU von KATALOG."""
+    try:
+        found = json.load(open(DISCOVERY_FOUND, encoding="utf-8"))
+    except Exception:
+        return ""
+    if not isinstance(found, dict) or not found:
+        return ""
+    idx = _katalog_index()
+    neu, bekannt = [], 0
+    for key, val in found.items():
+        try:
+            fg, fn, dp = (int(x) for x in key.split("-"))
+        except Exception:
+            continue
+        if (fg, fn, dp) in idx:
+            bekannt += 1
+        else:
+            neu.append((fg, fn, dp, val))
+    neu.sort()
+    ts = ""
+    try:
+        ts = datetime.datetime.fromtimestamp(os.path.getmtime(DISCOVERY_FOUND)).strftime("%d.%m.%Y %H:%M")
+    except Exception:
+        pass
+    head = (f'<div class="domain"><div class="dh" style="background:#5b6770;'
+            f'background-image:linear-gradient(90deg,rgba(255,255,255,.15),rgba(255,255,255,0))">'
+            f'<span class="ic">🔎</span><h2>{html.escape(L("Neu entdeckte Datenpunkte","Newly discovered data points"))} · '
+            f'{len(neu)} {html.escape(L("unbenannt","unnamed"))}</h2></div><div class="dbody">')
+    p = (L("Der Register-Scanner probiert laufend Adressen durch, die nicht im Hoval-Katalog stehen. "
+           "Antwortet der Regler, landet der Datenpunkt hier. <b>Unbenannt</b> heißt: der Regler liefert einen Wert, "
+           "aber es gibt keine offizielle Bezeichnung dafür — was er bedeutet, muss durch Beobachtung bewiesen werden.",
+           "The register scanner continuously probes addresses that are not in the Hoval catalogue. If the controller "
+           "answers, the data point shows up here. <b>Unnamed</b> means: the controller returns a value, but there is no "
+           "official label — its meaning has to be proven by observation."))
+    out = [head, f'<p style="margin:.2rem 0 .8rem">{p}</p>']
+    if neu:
+        out.append(f'<table><tr><th>fg-fn-dp</th><th>{L("Rohwert","Raw value")}</th>'
+                   f'<th>{L("dezimal","decimal")}</th></tr>')
+        for fg, fn, dp, val in neu:
+            hx, hint = _disc_val(val)
+            out.append(f'<tr><td><code>{fg}-{fn}-{dp}</code></td><td class="val">{hx}</td>'
+                       f'<td class="muted">{html.escape(hint)}</td></tr>')  # hx bereits escaped
+        out.append("</table>")
+    else:
+        out.append(f'<div class="note ok">{L("Aktuell kein unbenannter Datenpunkt — alle Funde stehen bereits im Katalog.","Currently no unnamed data point — all finds are already in the catalogue.")}</div>')
+    out.append(f'<div class="note" style="margin-top:.8rem">{len(found)} {L("Funde gesamt","finds in total")} · '
+               f'{bekannt} {L("davon im Katalog (unten als benannte Werte gelistet)","of them in the catalogue (listed below as named values)")}'
+               + (f' · {L("Stand","as of")} {ts}' if ts else "") + '</div>')
+    out.append("</div></div>")
+    return "".join(out)
 
 class H(http.server.BaseHTTPRequestHandler):
     def log_message(self,*a): pass
@@ -669,11 +786,19 @@ class H(http.server.BaseHTTPRequestHandler):
                     self.send_header("Content-Length", str(len(data))); self.end_headers(); self.wfile.write(data); return
             self.send_response(404); self.send_header("Content-Type","text/plain; charset=utf-8"); self.end_headers()
             self.wfile.write("hoxpi_assistent.html nicht gefunden (gehoert nach /home/admin/hoval-bridge/)".encode()); return
+        if p == "/api/verlauf_data":
+            st, body, ct = _vah(q)
+            bd = body if isinstance(body, bytes) else body.encode()
+            self.send_response(st)
+            self.send_header("Content-Type", ct)
+            self.send_header("Content-Length", str(len(bd)))
+            self.end_headers(); self.wfile.write(bd); return
         if p == "/werte":    body, rf, act = self.werte(), True, "werte"
         elif p == "/alle":   body, rf, act = self.alle(), True, "alle"
         elif p == "/register": body, rf, act = self.register(), False, "register"
         elif p in ("/integration","/loxone","/homeassistant","/anleitung"): body, rf, act = self.integration() + self.stats_section() + self.mcp_section() + self.netz_section() + self.anleitung().replace('<h1>', '<h2 class="sec" style="font-size:1.35rem;margin-top:2.2rem">', 1).replace('</h1>', '</h2>', 1), False, "integration"
         elif p == "/sicherheit": body, rf, act = self.sicherheit(), False, "sicherheit"
+        elif p == "/verlauf": body, rf, act = verlauf_page(), False, "verlauf"
         else:                body, rf, act = self.home(), False, "home"
         out = page(act.title(), act, body, rf, path=p).encode("utf-8")
         self.send_response(200); self.send_header("Content-Type","text/html; charset=utf-8")
@@ -693,6 +818,8 @@ class H(http.server.BaseHTTPRequestHandler):
             return
         if pr.path == "/api/features/apply":
             self.api_features_apply(); return
+        if pr.path == "/api/watch/config":
+            self.api_watch_config(); return
         if pr.path == "/api/stats":
             self.api_stats(); return
         if pr.path == "/api/network":
@@ -965,7 +1092,79 @@ function stoggle(on){
          L("Hält Regelstrategie 3 und die bus-getriebene Konstantanforderung (Eingänge 30-046/057/066 = AUS). Nötig für die relais-freie Heiz-/Kühlsteuerung über Loxone.",
            "Keeps control strategy 3 and the bus-driven constant demand (inputs 30-046/057/066 = OFF). Required for relay-free heating/cooling control via Loxone."),True),
     ]
-    def api_features_apply(self):
+    WATCH_CONF_F = "/home/admin/hoval-watch/config.json"
+    WATCH_DEFAULTS = {"mqtt": True, "webhook_url": None, "max_starts_per_h": 5, "ww_delta_k": 10, "ww_hours": 4}
+    WATCH_LIMITS = {"max_starts_per_h": (1, 30), "ww_delta_k": (2, 30), "ww_hours": (1, 48)}
+    def watch_conf(self):
+        try:
+            with open(self.WATCH_CONF_F, encoding="utf-8") as f: d = json.load(f)
+            if not isinstance(d, dict): d = {}
+        except Exception: d = {}
+        return {**self.WATCH_DEFAULTS, **d}
+
+    def api_watch_config(self):
+        # Waechter-Schwellen + Webhook aus dem Dashboard schreiben (2FA-geschuetzt via do_POST-Guard).
+        # hoval_watch.py (Cron */2) liest config.json bei jedem Lauf -> wirkt binnen 2 Minuten.
+        import os as _o
+        try:
+            body = self._read_json()
+            if not isinstance(body, dict):
+                self.json_out({"ok": False, "fehler": "ungueltige Daten"}); return
+            cur = self.watch_conf()
+            for k, (lo, hi) in self.WATCH_LIMITS.items():
+                if k in body:
+                    try: v = int(body[k])
+                    except Exception:
+                        self.json_out({"ok": False, "fehler": k + ": keine ganze Zahl"}); return
+                    if not lo <= v <= hi:
+                        self.json_out({"ok": False, "fehler": k + ": erlaubt " + str(lo) + "-" + str(hi)}); return
+                    cur[k] = v
+            if "webhook_url" in body:
+                u = str(body["webhook_url"] or "").strip()
+                if u and not (u.startswith("http://") or u.startswith("https://")) or " " in u:
+                    self.json_out({"ok": False, "fehler": "Webhook-URL muss mit http:// oder https:// beginnen"}); return
+                cur["webhook_url"] = u or None
+            if "mqtt" in body: cur["mqtt"] = bool(body["mqtt"])
+            tmp = self.WATCH_CONF_F + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f: json.dump(cur, f, ensure_ascii=False)
+            try:
+                st = _o.stat(self.WATCH_CONF_F); _o.chown(tmp, st.st_uid, st.st_gid); _o.chmod(tmp, 0o664)
+            except Exception: pass
+            _o.replace(tmp, self.WATCH_CONF_F)
+            self.json_out({"ok": True, "config": cur})
+        except Exception as e:
+            self.json_out({"ok": False, "fehler": str(e)}, 500)
+
+    def watch_config_panel(self):
+        c = self.watch_conf()
+        def num(key, label, unit):
+            lo, hi = self.WATCH_LIMITS[key]
+            return ('<label style="display:flex;align-items:center;gap:.5rem;padding:.3rem 0">'
+                    '<span style="flex:1;color:#5a6675;font-size:.88rem">' + label + '</span>'
+                    '<input id="wc_' + key + '" type="number" min="' + str(lo) + '" max="' + str(hi) + '" value="' + str(c.get(key, "")) + '" '
+                    'style="width:70px;padding:.3rem .4rem;border:1px solid #dbe1ea;border-radius:7px;text-align:right">'
+                    '<span style="color:#8893a2;font-size:.82rem;width:52px">' + unit + '</span></label>')
+        wh = html.escape(str(c.get("webhook_url") or ""))
+        rows = [
+            num("max_starts_per_h", L("Verdichter-Kurztakten ab", "Compressor short-cycling from"), L("Starts/h", "starts/h")),
+            num("ww_delta_k", L("Warmwasser gilt als kalt bei Ist &lt; Soll &minus;", "Hot water counts as cold when actual &lt; setpoint &minus;"), "K"),
+            num("ww_hours", L("&hellip; und das laenger als", "&hellip; for longer than"), L("Stunden", "hours")),
+            '<label style="display:flex;align-items:center;gap:.5rem;padding:.3rem 0">'
+            '<span style="flex:0 0 auto;color:#5a6675;font-size:.88rem">' + L("Webhook-URL (optional, POST JSON)", "Webhook URL (optional, POST JSON)") + '</span>'
+            '<input id="wc_webhook_url" type="url" placeholder="https://..." value="' + wh + '" '
+            'style="flex:1;min-width:180px;padding:.3rem .5rem;border:1px solid #dbe1ea;border-radius:7px"></label>',
+            '<label style="display:flex;align-items:center;gap:.5rem;padding:.3rem 0;color:#5a6675;font-size:.88rem">'
+            '<input id="wc_mqtt" type="checkbox"' + (' checked' if c.get("mqtt") else '') + '> '
+            + L("Alarme auch per MQTT an Home Assistant", "Also send alarms via MQTT to Home Assistant") + '</label>',
+        ]
+        return ('<div style="margin:-.2rem 0 .5rem 1rem;padding:.5rem .8rem;background:#fbf8f3;border:1px solid #efe4d2;border-radius:9px">'
+                '<div style="font-size:.8rem;color:#8893a2;font-weight:700;text-transform:uppercase;letter-spacing:.3px;margin-bottom:.3rem">'
+                + L("Schwellen &amp; Webhook", "Thresholds &amp; webhook") + '</div>' + "".join(rows)
+                + '<div style="display:flex;align-items:center;gap:.7rem;margin-top:.4rem">'
+                '<button onclick="wsave()" style="background:#0a8f4f;color:#fff;border:0;border-radius:8px;padding:.4rem .9rem;font-size:.85rem;font-weight:700;cursor:pointer">'
+                + L("Speichern", "Save") + '</button><span id="wc_msg" style="color:#d6202f;font-size:.85rem"></span>'
+                '<span style="color:#8893a2;font-size:.78rem">' + L("wirkt binnen 2 Min. (Cron)", "takes effect within 2 min (cron)") + '</span></div></div>')
+
         # Komplette hoxpi-features.json vom Inbetriebnahme-Assistenten uebernehmen (2FA-geschuetzt via do_POST-Guard)
         import os as _o
         try:
@@ -1075,6 +1274,8 @@ function stoggle(on){
                 '<button onclick="ftoggle(\'' + key + '\',' + ('false' if on else 'true') + ',' + ('true' if crit else 'false') + ')" '
                 'style="background:' + btn_bg + ';color:#fff;border:0;border-radius:9px;padding:.55rem 1.1rem;font-weight:700;cursor:pointer;min-width:96px">'
                 + btn_tx + '</button></div>')
+            if key == "watch" and on:
+                rows.append(self.watch_config_panel())
             if key == "keepalive" and on:
                 kd = feats.get("keepalive_dps", {})
                 subs = []
@@ -1099,6 +1300,18 @@ function fdp(dp,on,crit){
  fetch('/api/feature',{method:'POST',body:JSON.stringify({key:'keepalive',dp:dp,on:on,confirm:true})}).then(function(r){return r.json();}).then(function(j){
   if(j.ok){location.reload();}else{alert('Fehler: '+j.fehler);}
  }).catch(function(e){alert('Fehler: '+e);});
+}
+function wsave(){
+ var b={max_starts_per_h:document.getElementById('wc_max_starts_per_h').value,
+        ww_delta_k:document.getElementById('wc_ww_delta_k').value,
+        ww_hours:document.getElementById('wc_ww_hours').value,
+        webhook_url:document.getElementById('wc_webhook_url').value,
+        mqtt:document.getElementById('wc_mqtt').checked};
+ document.getElementById('wc_msg').textContent='...';
+ fetch('/api/watch/config',{method:'POST',body:JSON.stringify(b)}).then(function(r){return r.json();}).then(function(j){
+  if(j.ok){document.getElementById('wc_msg').style.color='#0a8f4f';document.getElementById('wc_msg').textContent='\u2713 gespeichert';}
+  else{document.getElementById('wc_msg').style.color='#d6202f';document.getElementById('wc_msg').textContent=j.fehler;}
+ }).catch(function(e){document.getElementById('wc_msg').textContent='Fehler: '+e;});
 }
 function ftoggle(key,on,crit){
  if(crit&&!on&&!confirm('Keepalive wirklich abschalten?\\n\\nOhne Keepalive driften die bus-getriebenen Einstellungen evtl. weg – die relais-freie Heiz-/Kühlsteuerung kann ausfallen. Nur für Tests!'))return;
@@ -1342,6 +1555,7 @@ function apost(url, body, msgid){
         secs = [(L("Wärmepumpe (UnitId 1)","Heat pump (UnitId 1)"),"🔥",1),(L("Wohnraumlüftung (UnitId 520)","Ventilation (UnitId 520)"),"💨",520)]
         out = [f'<h1>{L("Alle Live-Werte","All live values")}</h1>',
                f'<p>{L("Automatisch aus dem CAN-Bus dekodiert — jeder Datenpunkt mit Register, Hoval-Bezeichnung und Wert. — = kein Sensor / nicht belegt.","Automatically decoded from the CAN bus — every data point with register, Hoval label and value. — = no sensor / not assigned.")}</p>']
+        out.append(discovery_card())
         tr=0; ts=0
         for title, icon, uid in secs:
             regs = sorted(r for r in m if m[r]["unit_id"]==uid)
