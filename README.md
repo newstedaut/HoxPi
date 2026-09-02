@@ -17,6 +17,8 @@ HoxPi passively reads the CAN bus of a Hoval® TopTronic® E system (heat pump, 
 - **Home Assistant**: auto-generated Modbus package (`hoxpi.yaml` download) + optional MQTT with auto-discovery
 - **Grafana statistics** (optional, can be toggled on/off in the dashboard): Prometheus exporter → Prometheus (400 days retention) → provisioned Grafana dashboard (temperatures, power, COP, Smart Grid, daily energy)
 - **SG-Ready / PV surplus**: full support for Hoval's Smart Grid offset registers (Use Case 8 of the Hoval Modbus guideline)
+- **Fault watcher & short-cycle alarm** with **in-dashboard configuration** (Security page: thresholds for starts/h, DHW drop, webhook URL, MQTT) - no file editing needed
+- **History charts** (`/verlauf`, 24h/7d/30d) and a **newly discovered datapoints** card (catalogue cross-check) on the dashboard
 - **AI interface (MCP)**: built-in [Model Context Protocol](https://modelcontextprotocol.io) server (`http://<pi-ip>:8808/mcp`) — AI assistants like Claude can inspect the system live, explain values, analyse Prometheus history and diagnose faults in plain language. Add it to **Claude Desktop** via `mcp-remote` in `claude_desktop_config.json` (needs Node.js; exact snippet on the dashboard's *Integration* page — Claude's hosted "custom connectors" require a public https URL, so the local bridge is the way to go on a home network). Writing via MCP is **off by default** (`config.json: enable_write`) and always requires explicit confirmation plus all bridge safeguards
 
 ## Screenshots
@@ -116,7 +118,8 @@ HoxPi liest den CAN-Bus einer Hoval® TopTronic® E-Anlage (Wärmepumpe, Wohnrau
 - **KI-Schnittstelle (MCP)**: eingebauter [Model-Context-Protocol](https://modelcontextprotocol.io)-Server (`http://<pi-ip>:8808/mcp`) — KI-Assistenten wie Claude können die Anlage live inspizieren, Werte erklären, die Historie auswerten und Fehler eingrenzen. Einbindung in **Claude Desktop** per `mcp-remote` in der `claude_desktop_config.json` (braucht Node.js; der fertige Block steht auf der Dashboard-Seite *Integration* — Claudes gehostete „Custom Connectors" verlangen eine öffentliche https-Adresse, im Heimnetz ist die lokale Brücke der richtige Weg). Schreiben via MCP ist **standardmäßig aus** (`config.json: enable_write`) und verlangt immer eine explizite Bestätigung plus alle Bridge-Sicherungen
 
 - **Relais-freier Original-Template-Betrieb**: Kanal-Exklusion (nur ein Sollwert-Register je Heizkreis) + Keepalive hält die Eingänge 30-046/057/066 = AUS → das **unveränderte** Hoval-Template steuert Heizen/Kühlen **kontaktlos**, ganz ohne Drahtbrücke oder Relais
-- **Störungs-Wächter & Verdichter-Kurzzyklus-Alarm**: meldet Fehlercodes, Hoch-/Niederdruck, Warmwasser-Ausfall und Kurztakten sofort an Home Assistant, Logdatei und optional Webhook
+- **Störungs-Wächter & Verdichter-Kurzzyklus-Alarm**: meldet Fehlercodes, Hoch-/Niederdruck, Warmwasser-Ausfall und Kurztakten sofort an Home Assistant, Logdatei und optional Webhook; Schwellen und Webhook direkt im Dashboard einstellbar (Sicherheit → Störungs-Wächter → „Schwellen & Webhook“)
+- **Verlaufs-Graphen** (`/verlauf`, 24h/7d/30d) und Karte „Neu entdeckte Datenpunkte“ (Katalogabgleich) im Dashboard
 - **Automatisches Backup**: nächtliche, versionierte Sicherung aller Skripte & Configs
 - **Funktions-Schalter** (Dashboard → *Sicherheit*): jede Zusatzfunktion einzeln ein-/ausschaltbar (inkl. jedem Keepalive-Eingang), hinter 2FA
 - **Inbetriebnahme-Assistent** (`assistant/hoxpi_assistent.html`): geführtes, browserbasiertes Setup, erzeugt die passende `hoxpi-features.json` (Trockentest, schreibt nichts)
