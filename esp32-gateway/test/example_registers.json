@@ -1,0 +1,22 @@
+[
+{"reg": 1477, "unit_name": "WEZ", "unit_id": 1, "fg": 0, "fn": 0, "dp": 0, "name": "AF1 - outdoor sensor 1", "type": "S16", "decimal": 1, "min": 0, "max": 0, "writable": "No", "unit": "°C"},
+{"reg": 1478, "unit_name": "WEZ", "unit_id": 1, "fg": 1, "fn": 0, "dp": 3050, "name": "Heating operation choice", "type": "LIST", "decimal": 0, "min": null, "max": 0, "writable": "Yes", "unit": ""},
+{"reg": 1481, "unit_name": "WEZ", "unit_id": 1, "fg": 1, "fn": 0, "dp": 3051, "name": "Normal room temp. heating oper.", "type": "S16", "decimal": 1, "min": 100, "max": 300, "writable": "Yes", "unit": "°C"},
+{"reg": 1490, "unit_name": "WEZ", "unit_id": 1, "fg": 1, "fn": 0, "dp": 7036, "name": "Flow setpoint constant req. heating", "type": "S16", "decimal": 1, "min": 100, "max": 1100, "writable": "Yes", "unit": "°C"},
+{"reg": 1496, "unit_name": "WEZ", "unit_id": 1, "fg": 2, "fn": 0, "dp": 5050, "name": "Hot water operation choice", "type": "LIST", "decimal": 0, "min": null, "max": 0, "writable": "Yes", "unit": ""},
+{"reg": 1497, "unit_name": "WEZ", "unit_id": 1, "fg": 2, "fn": 0, "dp": 5051, "name": "Normal hot water temp.", "type": "S16", "decimal": 1, "min": 100, "max": 700, "writable": "Yes", "unit": "°C"},
+{"reg": 1499, "unit_name": "WEZ", "unit_id": 1, "fg": 2, "fn": 0, "dp": 1004, "name": "Hot water setpoint", "type": "S16", "decimal": 1, "min": 0, "max": 0, "writable": "No", "unit": "°C"},
+{"reg": 1500, "unit_name": "WEZ", "unit_id": 1, "fg": 2, "fn": 0, "dp": 4, "name": "Hot water actual SF", "type": "S16", "decimal": 1, "min": 0, "max": 0, "writable": "No", "unit": "°C"},
+{"reg": 1501, "unit_name": "WEZ", "unit_id": 1, "fg": 1, "fn": 0, "dp": 2051, "name": "Status heating circuit control", "type": "U8", "decimal": 0, "min": 0, "max": 0, "writable": "No", "unit": ""},
+{"reg": 1534, "unit_name": "WEZ", "unit_id": 1, "fg": 60, "fn": 254, "dp": 27, "name": "Error code from controller", "type": "U8", "decimal": 0, "min": 0, "max": 0, "writable": "No", "unit": ""},
+{"reg": 1561, "unit_name": "WEZ", "unit_id": 1, "fg": 10, "fn": 1, "dp": 9075, "name": "Heat generator operation choice", "type": "LIST", "decimal": 0, "min": null, "max": 0, "writable": "Yes", "unit": ""},
+{"reg": 19482, "unit_name": "WEZ", "unit_id": 1, "fg": 1, "fn": 0, "dp": 7047, "name": "Flow setpoint constant req. cooling", "type": "S16", "decimal": 1, "min": 0, "max": 300, "writable": "Yes", "unit": "°C"},
+{"reg": 23622, "unit_name": "HV", "unit_id": 520, "fg": 50, "fn": 0, "dp": 40650, "name": "Op. choice ventilation", "type": "LIST", "decimal": 0, "min": null, "max": 0, "writable": "Yes", "unit": ""},
+{"reg": 23632, "unit_name": "HV", "unit_id": 520, "fg": 50, "fn": 0, "dp": 0, "name": "Outside air temp.", "type": "S16", "decimal": 1, "min": -300, "max": 500, "writable": "No", "unit": "°C"},
+{"reg": 25613, "unit_name": "WEZ", "unit_id": 1, "fg": 10, "fn": 1, "dp": 23009, "name": "Eletrical energy WEZ MWh_high", "type": "U32", "decimal": 3, "min": 0, "max": 0, "writable": "No", "unit": "MWh"},
+{"reg": 25614, "unit_name": "WEZ", "unit_id": 1, "fg": 10, "fn": 1, "dp": 23009, "name": "Eletrical energy WEZ MWh_low", "type": "U32", "decimal": 3, "min": 0, "max": 0, "writable": "No", "unit": "MWh"},
+{"reg": 27486, "unit_name": "WEZ", "unit_id": 1, "fg": 60, "fn": 254, "dp": 51, "name": "Heat quantity cooling_high", "type": "U32", "decimal": 3, "min": 0, "max": 0, "writable": "No", "unit": "MWh"},
+{"reg": 27487, "unit_name": "WEZ", "unit_id": 1, "fg": 60, "fn": 254, "dp": 51, "name": "Heat quantity cooling_high", "type": "U32", "decimal": 3, "min": 0, "max": 0, "writable": "No", "unit": "MWh"},
+{"reg": 27490, "unit_name": "WEZ", "unit_id": 1, "fg": 60, "fn": 254, "dp": 45, "name": "Coefficient of Performance", "type": "U8", "decimal": 1, "min": 0, "max": 0, "writable": "No", "unit": ""},
+{"reg": 27509, "unit_name": "WEZ", "unit_id": 1, "fg": 2, "fn": 0, "dp": 5077, "name": "Smart-Grid (Offset) WW-Sollvalue", "type": "S16", "decimal": 1, "min": 0, "max": 800, "writable": "Yes", "unit": "K"}
+]

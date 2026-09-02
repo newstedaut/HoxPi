@@ -1,0 +1,96 @@
+menu "HoxPi Gateway"
+
+    choice HOXPI_BOARD
+        prompt "Board"
+        default HOXPI_BOARD_OLIMEX_EVB
+        config HOXPI_BOARD_OLIMEX_EVB
+            bool "Olimex ESP32-EVB (CAN onboard, LAN8710 RMII)"
+        config HOXPI_BOARD_WAVESHARE_S3_POE
+            bool "Waveshare ESP32-S3-POE-ETH (W5500 SPI, CAN-Transceiver onboard)"
+        config HOXPI_BOARD_CUSTOM
+            bool "Eigenes Board (Pins unten setzen)"
+    endchoice
+
+    config HOXPI_ETH_RMII
+        bool "Ethernet ueber internen EMAC (RMII-PHY) statt W5500/SPI"
+        default y if HOXPI_BOARD_OLIMEX_EVB
+        default n
+
+    config HOXPI_CAN_TX_GPIO
+        int "CAN TX GPIO"
+        default 5 if HOXPI_BOARD_OLIMEX_EVB
+        default 17 if HOXPI_BOARD_WAVESHARE_S3_POE
+        default 5
+        help
+            Olimex ESP32-EVB: TX GPIO5 / RX GPIO35 (MCP2562 onboard). Waveshare S3-POE-ETH:
+            Werte VOR dem ersten Flashen mit dem Waveshare-Wiki abgleichen (Vorbelegung ungeprueft).
+
+    config HOXPI_CAN_RX_GPIO
+        int "CAN RX GPIO"
+        default 35 if HOXPI_BOARD_OLIMEX_EVB
+        default 18 if HOXPI_BOARD_WAVESHARE_S3_POE
+        default 35
+
+    config HOXPI_POLL_INTERVAL_S
+        int "Poll-Intervall WEZ (s)"
+        default 30
+        help
+            Pause zwischen zwei GET-Runden ueber alle WEZ-Register (HoxPi: --poll-interval 30).
+            HomeVent-Register werden fest alle 5 s abgefragt.
+
+    config HOXPI_POLL_DELAY_MS
+        int "Sendeabstand zwischen zwei GET-Frames (ms)"
+        default 100
+
+    config HOXPI_MODBUS_PORT
+        int "Modbus-TCP Port"
+        default 502
+
+    config HOXPI_ENABLE_WRITE
+        bool "Schreibpfad Modbus -> CAN freigeben (Whitelist, min/max, Kalt-Cache-Schutz)"
+        default n
+        help
+            Entspricht --enable-write bei HoxPi. Nur Register der generierten Whitelist
+            (whitelist.json bzw. eingebaute HoxPi-Liste) werden auf den Bus geschrieben.
+
+    menu "Ethernet RMII (interner EMAC)"
+        depends on HOXPI_ETH_RMII
+        config HOXPI_ETH_PHY_ADDR
+            int "PHY-Adresse"
+            default 0
+        config HOXPI_ETH_PHY_RST_GPIO
+            int "PHY Reset GPIO (-1 = keiner)"
+            default -1
+        config HOXPI_ETH_MDC_GPIO
+            int "MDC GPIO"
+            default 23
+        config HOXPI_ETH_MDIO_GPIO
+            int "MDIO GPIO"
+            default 18
+    endmenu
+
+    menu "Ethernet W5500 (SPI)"
+        depends on !HOXPI_ETH_RMII
+        config HOXPI_W5500_MISO
+            int "MISO GPIO"
+            default 12
+        config HOXPI_W5500_MOSI
+            int "MOSI GPIO"
+            default 11
+        config HOXPI_W5500_SCLK
+            int "SCLK GPIO"
+            default 13
+        config HOXPI_W5500_CS
+            int "CS GPIO"
+            default 14
+        config HOXPI_W5500_INT
+            int "INT GPIO"
+            default 10
+        config HOXPI_W5500_RST
+            int "RST GPIO (-1 = keiner)"
+            default 9
+        help
+            Vorbelegung nach Waveshare ESP32-S3-ETH-Beispielen; fuer die POE-ETH-8DI-8DO-Variante
+            vor dem Flashen im Wiki/Schaltplan pruefen.
+    endmenu
+endmenu

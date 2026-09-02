@@ -18,3 +18,13 @@ __pycache__/
 *.log
 *_out.txt
 statuslog*.csv
+
+# ESP32-Gateway: generierte Registerkarte (aus Hovals Liste) + Build-Artefakte
+esp32-gateway/main/regmap_gen.h
+esp32-gateway/build/
+esp32-gateway/sdkconfig
+esp32-gateway/sdkconfig.old
+esp32-gateway/managed_components/
+esp32-gateway/dependencies.lock
+esp32-gateway/test/test_proto
+esp32-gateway/test/out_*.txt
