@@ -68,6 +68,8 @@ The installer asks to download the **official Hoval datapoint list** (xlsx) from
 > **Note on datapoint-list versions & controller firmware:** Hoval extends the datapoint list over time (tested up to **V2-11-12 / rev. ≥2.38**, which added e.g. *room setpoint cooling* and refrigerant-circuit diagnostics). HoxPi accepts any list version — datapoints your controller firmware does not know simply never answer on the CAN bus and stay empty. That is expected, not an error. Rule of thumb: the newer your TopTronic E controller firmware, the more of the new datapoints will respond.
 >
 > **Auto-update:** `tools/update_datapoints.py --check|--apply [--restart]` downloads the current list, regenerates both JSON files when it changed (with backups and a sanity check) and can restart the bridge. Optional monthly timer: `systemd/hoval-datapoints-update.{service,timer}` — so the register map keeps itself up to date, e.g. after a Hoval service visit updated the controller firmware.
+>
+> **Sharing new datapoints:** the discovery scanner logs every CAN datapoint that answers a GET. `tools/discovery_export.py --stats` shows which of them are *not* in Hoval's list; with a curated `tools/discovery_names.json` (template: `discovery_names.example.json`, only entries with `"verified": true`) it writes a ready-to-commit CSV for [hoval_datapoints](https://github.com/newstedaut/hoval_datapoints)`/community_additions`. `--all-new` also lists unnamed finds, marked UNVERIFIED.
 
 ## Security notes
 
@@ -160,6 +162,8 @@ Der Installer fragt nach der **offiziellen Hoval-Datenpunktliste** (xlsx) von ho
 > **Hinweis zu Listen-Versionen & Regler-Firmware:** Hoval erweitert die Datenpunktliste laufend (getestet bis **V2-11-12 / Rev. ≥2.38**, neu darin z. B. *Raumsolltemperatur Kühlbetrieb* und Kältekreis-Diagnose). HoxPi kommt mit jeder Listenversion klar — Datenpunkte, die deine Regler-Firmware nicht kennt, antworten am CAN einfach nie und bleiben leer. Das ist normal, kein Fehler. Faustregel: je neuer die TopTronic-E-Regler-Firmware, desto mehr der neuen Datenpunkte antworten.
 >
 > **Auto-Update:** `tools/update_datapoints.py --check|--apply [--restart]` laedt die aktuelle Liste, erzeugt bei Aenderung beide JSONs neu (mit Backup + Sanity-Check) und kann die Bridge neu starten. Optionaler Monats-Timer: `systemd/hoval-datapoints-update.{service,timer}` — so haelt sich die Registerkarte selbst aktuell, z. B. nachdem der Hoval-Service die Regler-Firmware aktualisiert hat.
+>
+> **Neue Datenpunkte teilen:** der Discovery-Scanner protokolliert jeden CAN-Datenpunkt, der auf ein GET antwortet. `tools/discovery_export.py --stats` zeigt, welche davon *nicht* in Hovals Liste stehen; mit einer kuratierten `tools/discovery_names.json` (Vorlage `discovery_names.example.json`, nur Eintraege mit `"verified": true`) erzeugt es eine commit-fertige CSV fuer [hoval_datapoints](https://github.com/newstedaut/hoval_datapoints)`/community_additions`. `--all-new` listet auch unbenannte Funde, als UNVERIFIED markiert.
 
 ## Sicherheit
 
