@@ -60,6 +60,38 @@ SENSORS = [
 INVALID_SETPOINT = -127.0
 COP_HI, COP_LO = 31667, 31668
 
+# ---------- Verfuegbarkeits-Alarm (Backlog #9) ----------
+# "stale" = seit STALE_MIN Minuten kein erfolgreicher Modbus-Read von der Bridge
+#   ODER can0 rx_packets seit STALE_MIN Minuten unveraendert (Regler/CAN tot ->
+#   die Bridge antwortet weiter, liefert aber eingefrorene Werte).
+STALE_MIN_DEFAULT = 10
+CAN_RX_STAT = "/sys/class/net/can0/statistics/rx_packets"
+_stale = {"last_ok": time.time(), "can_rx": -1, "can_t": time.time(), "state": None}
+def _can_rx():
+    try: return int(open(CAN_RX_STAT).read().strip())
+    except Exception: return None
+def stale_check(c, stale_min):
+    now = time.time()
+    rx = _can_rx()
+    if rx is not None and rx != _stale["can_rx"]:
+        _stale["can_rx"] = rx; _stale["can_t"] = now
+    age_mb  = now - _stale["last_ok"]
+    age_can = now - _stale["can_t"]
+    lim = stale_min * 60
+    reasons = []
+    if age_mb  > lim: reasons.append("modbus")
+    if age_can > lim: reasons.append("can0")
+    if rx is None:    reasons.append("can0-fehlt")
+    on = bool(reasons)
+    attr = {"age_s": int(max(age_mb, age_can)), "modbus_age_s": int(age_mb), "can_age_s": int(age_can),
+            "can_rx": rx, "reason": ",".join(reasons) or "ok", "stale_min": stale_min,
+            "last_ok": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(_stale["last_ok"]))}
+    c.publish(f"{BASE}/stale/state", "ON" if on else "OFF", retain=True)
+    c.publish(f"{BASE}/stale/attr", json.dumps(attr), retain=True)
+    if on != _stale["state"]:
+        _stale["state"] = on
+        print(time.strftime("%H:%M:%S"), "stale ->", "ON" if on else "OFF", attr["reason"], flush=True)
+
 # ---------- Steuerbare Entities ----------
 # key, reg, name, art ("number"|"select"), enum-map (bei select)
 CONTROLS = [
@@ -148,6 +180,12 @@ def discovery(c, wl):
         if unit: cfg["unit_of_measurement"] = unit
         if dc: cfg["device_class"] = dc; cfg["state_class"] = "measurement"
         c.publish(f"homeassistant/sensor/hoxpi/{key}/config", json.dumps(cfg), retain=True)
+    # Verfuegbarkeits-Alarm: bewusst OHNE availability_topic, damit HA ihn auch zeigt,
+    # wenn die Bridge steht (der MQTT-Dienst selbst lebt ja noch).
+    c.publish("homeassistant/binary_sensor/hoxpi/stale/config", json.dumps({
+        "name": "HoxPi Daten veraltet", "unique_id": "hoxpi_stale", "device_class": "problem",
+        "state_topic": f"{BASE}/stale/state", "json_attributes_topic": f"{BASE}/stale/attr",
+        "device": DEVICE}), retain=True)
     for key, reg, name, art, enum in CONTROLS:
         topic = f"homeassistant/{art}/hoxpi/{key}/config"
         if reg not in wl:
@@ -213,6 +251,7 @@ def main():
                 c.publish(f"homeassistant/sensor/hoxpi/{_k}/config", "", retain=True)
             for _k,_r,_n,_a,_e in CONTROLS:
                 c.publish(f"homeassistant/{_a}/hoxpi/{_k}/config", "", retain=True)
+            c.publish("homeassistant/binary_sensor/hoxpi/stale/config", "", retain=True)
             main._was_off = True
             time.sleep(INTERVAL); continue
         else:
@@ -226,6 +265,7 @@ def main():
             try:
                 w = mb_read(reg)
                 if w is None: continue
+                _stale["last_ok"] = time.time()
                 v = scaled(reg, w[0])
                 if enum is not None:
                     c.publish(f"{BASE}/{key}/state", enum.get(int(v), str(v)), retain=True)
@@ -258,6 +298,10 @@ def main():
                     c.publish(f"{BASE}/{key}/state", scaled(reg, w[0]), retain=True)
             except Exception:
                 pass
+        try:
+            stale_check(c, int(_f.get("mqtt_ha", {}).get("stale_min", STALE_MIN_DEFAULT)))
+        except Exception as e:
+            print("stale_check:", e, flush=True)
         time.sleep(INTERVAL)
 
 if __name__ == "__main__":

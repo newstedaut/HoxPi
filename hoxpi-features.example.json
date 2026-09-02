@@ -1,6 +1,6 @@
 {
  "watch":      {"enabled": true},
- "mqtt_ha":    {"enabled": true},
+ "mqtt_ha":    {"enabled": true, "stale_min": 10},
  "cop_filter": {"enabled": true},
  "backup":     {"enabled": true},
  "keepalive":  {"enabled": true},
