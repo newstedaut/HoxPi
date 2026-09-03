@@ -48,6 +48,33 @@ ENUM_EN = {
  23631:{0:"Off / standby",1:"Normal operation",2:"VOC mode",3:"Humidity mode",4:"Frost protection",
         5:"CoolVet (cooling)",6:"Fault",7:"Summer humidity",8:"Switch-off stop"},
 }
+# ---------- Wartezustand „Kühlen angefordert, Kältekreisregler wartet auf Kreis-Temperatur" (Backlog #15b) ----------
+# Befund RS485 03.09.2026 (HoxPi-Doku/RS485_Feldkarte.md 15:xx/16:xx): Der Kältekreisregler nimmt eine Kühl-Anforderung
+# erst an, wenn der Rücklauf seines Wasserkreises (Register 1535, = WP-RL 60-7-258) ≈ 19,4–19,5 °C erreicht hat. Darunter
+# passiert nichts (WEZ-Status 0, keine Pumpe, keine Sperre) — nach einem 5-min-Kühl-Kurzlauf (Kreis 11–14 °C) dauert das
+# je nach Bodenwärme 30 min bis 3 h. Kein Fehler, aber ohne Hinweis sieht es nach „ignorierter Anforderung" aus.
+KUEHL_START_MIN_RL = 19.5
+def kuehl_wartet(vals):
+    """-> Rücklauf (float, °C), wenn HK1 1501 = 22 (Kühlen extern) + UKA-Ventil 19870 = 1 + WEZ-Status 1539 = 0
+    + Rücklauf 1535 < KUEHL_START_MIN_RL; sonst None."""
+    try:
+        if vals.get(1539) != 0 or vals.get(1501) != 22 or vals.get(19870) != 1: return None
+        rl = vals.get(1535)
+        if rl is None or rl in (0xFFFF, 0x8000): return None
+        rl = (rl - 65536 if rl > 32767 else rl) / 10.0
+        return rl if rl < KUEHL_START_MIN_RL else None
+    except Exception:
+        return None
+def kuehl_wartet_txt(rl):
+    r = f"{rl:.1f}".replace(".", ","); s = f"{KUEHL_START_MIN_RL:.1f}".replace(".", ",")
+    return L(f"Kühlen angefordert – die Wärmepumpe wartet, bis der Rücklauf ≥ {s} °C ist (jetzt {r} °C). "
+             "Kein Fehler: der Kältekreisregler startet den Verdichter nicht mit kaltem Wasserkreis; nach einem "
+             "5-min-Kühl-Kurzlauf dauert das oft 30 min bis 3 h, bis der Fußboden das Wasser wieder erwärmt hat.",
+             f"Cooling requested – the heat pump waits until the return temperature is ≥ {KUEHL_START_MIN_RL:.1f} °C "
+             f"(now {rl:.1f} °C). Not a fault: the refrigeration controller does not start the compressor with a cold "
+             "water circuit; after a 5-min short cooling run this often takes 30 min to 3 h until the floor has "
+             "warmed the water again.")
+
 def st_txt(table_de, table_en, raw):
     """Statustext in der aktuellen Sprache; unbekannter Code -> 'Code n'."""
     t = table_en if curlang() == "en" else table_de
@@ -1666,10 +1693,13 @@ function apost(url, body, msgid){
 
     def werte(self):
         regs = [it[0] for _,_,subs in DOMAINS for _,items in subs for it in items if it[0] is not None]
-        vals, ok = read_modbus(regs)
+        vals, ok = read_modbus(regs + [19870])
         if not ok:
             return f'<h1>{L("Werte","Values")}</h1><div class="note warn">⚠️ {L("Brücke (Modbus :502) nicht erreichbar.","Bridge (Modbus :502) not reachable.")}</div>'
         out = [f'<h1>{L("Live-Werte","Live values")}</h1>']
+        _kw = kuehl_wartet(vals)
+        if _kw is not None:
+            out.append(f'<div class="note warn">⏳ {html.escape(kuehl_wartet_txt(_kw))}</div>')
         dcol = {"Wärmepumpe":"#e2001a","Heizung & Kühlung":"#e2001a","Warmwasser":"#c2185b","Wohnraumlüftung":"#69b41e"}
         for title, icon, subs in DOMAINS:
             c = dcol.get(title, "#e2001a")
@@ -1688,6 +1718,8 @@ function apost(url, body, msgid){
                         cls = "val" if raw is not None else "muted"
                     else:
                         txt, cls = fmt(raw, unit, dec, signed)
+                        if reg == 1539 and _kw is not None:
+                            txt += L(" – wartet auf Kreis-Temperatur", " – waiting for circuit temperature")
                     d = html.escape(desc(reg, tl(name), unit))
                     _z = get_labels().get(str(reg))
                     _nm = html.escape(tl(name)) + (f'<span class="ze">{html.escape(_z)}</span>' if _z else "")
