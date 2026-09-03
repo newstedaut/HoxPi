@@ -71,7 +71,7 @@ HELP = {
  "hoval_hc1_status": "0=Aus 1..3=Heizen 9..11=Kuehlen 12=Stoerung 26=SmartGrid",
  "hoval_wp_detailstatus": "Register 18723 FA-Status = WEZ-Statuscode wie hoval_wez_status (0/1/2/4/16/17/51/98), seit 03.09.2026 Faktor 1",
  "hoval_wez_status": "0=Aus 1=Heizen 2=Kuehlen 4=Warmwasser 16=Wiedereinschaltsperre 17=Verriegelung(Stoerung) 51=Startvorbereitung 98=Startphase(W:61)",
- "hoval_fehlercode": "255=OK, sonst gepackt: code+1 = Klasse*64+Nr (Klasse 1=W 2=B 3=E), Klartext in hoval_fehlercode_info",
+ "hoval_fehlercode": "255=OK, 0=kein Wert (FA antwortet nicht, z. B. nach Netz-Ein), sonst gepackt: code+1 = Klasse*64+Nr (Klasse 1=W 2=B 3=E), Klartext in hoval_fehlercode_info",
  "hoval_fehlercode_info": "aktiver Hoval-Fehler als Label code=W/B/E:nn (nur wenn 1534 != 255)",
  "hoval_stoerungsflag": "Register 1540: 0=keine, 8=Blockierung/Verriegelung aktiv",
  "hoval_leistung_soll_aktiv_pct": "aktiver Leistungs-Sollwert (-100=keine Anforderung; -127=ungueltig wird unterdrueckt)",
@@ -123,7 +123,7 @@ def metrics():
         if name in HELP: out.append(f"# HELP {name} {HELP[name]}")
         out.append(f"# TYPE {name} gauge")
         out.append(f"{name} {round(v*sc, 3)}")
-        if name == "hoval_fehlercode" and v != 255:
+        if name == "hoval_fehlercode" and v not in (0, 255):  # 0 = kein Wert (FA antwortet nicht, z. B. nach Netz-Ein)
             # gepackter Hoval-Code: code+1 = Klasse*64 + Nr  (W/B/E = Warnung/Blockierung/Verriegelung)
             c = int(v) + 1
             out.append(f"# HELP hoval_fehlercode_info {HELP['hoval_fehlercode_info']}")

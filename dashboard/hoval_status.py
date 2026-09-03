@@ -119,6 +119,8 @@ def fehlercode_split(raw):
 def fehlercode_txt(raw):
     """-> (Text, ist_stoerung) in der aktuellen Sprache."""
     sp = fehlercode_split(raw)
+    if raw is not None and int(raw) == 0:  # Bridge-0 = FA-Datenpunkt (noch) nicht beantwortet, z. B. nach Netz-Ein
+        return L("kein Wert – Kältekreisregler meldet (noch) nicht, z. B. nach Netz-Ein", "no value – refrigeration controller not reporting (yet), e.g. after power-on"), False
     if sp is None: return L("keine Störung", "no fault"), False
     code, k, _ = sp
     en = curlang() == "en"
