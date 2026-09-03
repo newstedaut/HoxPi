@@ -26,6 +26,18 @@ HK_STATUS = {0:"Abgeschaltet",1:"Heizen Normal",2:"Heizen Komfort",3:"Heizen Spa
 DHW_STATUS = {0:"Aus",1:"Laden Normal",2:"Laden Komfort",5:"Stoerung",6:"Zapfung",8:"Laden reduziert",
               12:"SmartGrid Vorzug",13:"SmartGrid Zwang"}
 SG_STATUS = {0:"Normal",1:"Vorzugbetrieb",2:"Gesperrt",3:"Abnahmezwang",255:"inaktiv"}
+WEZ_STATUS = {0:"Aus",1:"Heizen",2:"Kuehlen",4:"Warmwasser",16:"Wiedereinschaltsperre",17:"Verriegelung (Stoerung)",
+              51:"Startvorbereitung",98:"Startphase (W:61)"}
+# Register 1534: 255 = kein Fehler, sonst gepackt code+1 = Klasse*64+Nr (Klasse 1=W 2=B 3=E). Texte: eigene Analyse.
+FEHLER_TXT = {"B:02":"Niederdruck","E:02":"Niederdruck, verriegelt","W:58":"E-Stab nach Verriegelung",
+              "W:61":"Startphase-Sonderzustand","B:63":"Service-/Parametereingriff","E:31":"Verriegelung nach Eingriff"}
+class _FehlerEnum(dict):
+    def get(self, raw, default=None):
+        raw = int(raw)
+        if raw == 255: return "OK"
+        c = raw + 1; code = "%s:%02d" % ("IWBE"[(c >> 6) & 3], c & 63)
+        return code + (" " + FEHLER_TXT[code] if code in FEHLER_TXT else "")
+FEHLER_ENUM = _FehlerEnum()
 # Schreibbare LIST-Register (Enum-Maps)
 BW_HK  = {0:"Standby",1:"Woche 1",2:"Woche 2",4:"Konstant",5:"Sparbetrieb",7:"Hand Heizen",8:"Hand Kuehlen"}
 BW_WW  = {0:"Standby",1:"Woche 1",2:"Woche 2",4:"Konstant",6:"Sparbetrieb"}
@@ -52,6 +64,8 @@ SENSORS = [
     ("jaz",         27467, "Jahresarbeitszahl",    None, None,          None),
     ("leistungssollwert", 18767, "Leistungs-Sollwert WEZ", "%", None, None),
     ("anforderung",       18768, "Anforderung WEZ",       None, None, {0: "nein", 100: "ja"}),
+    ("status_wez",         1539, "Status WEZ",            None, None, WEZ_STATUS),
+    ("fehlercode",         1534, "Fehlercode WEZ",        None, None, FEHLER_ENUM),
 ]
 # 18767: Leistungs-Sollwert des Waermeerzeugers, S16 /10, -100..+100 %.
 #   -100.0 = kein Bedarf (unterer Anschlag des Reglerausgangs, gueltiger Wert)

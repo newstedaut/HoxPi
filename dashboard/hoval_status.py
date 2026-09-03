@@ -30,8 +30,8 @@ ST_DHW = {0:"Aus",1:"Laden normal",2:"Laden Komfort",5:"Störung",6:"Zapfung",
           8:"Laden reduziert",12:"SmartGrid",13:"SmartGrid Zwang"}
 ST_HP  = {0:"Aus",1:"Heizen",2:"Aktiv-Kühlen",3:"Sperre",4:"WW-Laden",5:"Frostschutz",
           6:"WEZ-Temp zu tief",7:"VL zu hoch",8:"Abtauen",9:"Passiv-Kühlen",
-          11:"Hochdruck-Störung",12:"Niederdruck-Störung",16:"Wiederanlauf",17:"EVU-Sperre",
-          18:"Vorlaufzeit",19:"Nachlaufzeit",51:"Kondensatorpumpe",55:"Inverter-Störung"}
+          11:"Hochdruck-Störung",12:"Niederdruck-Störung",16:"Wiedereinschaltsperre",17:"Verriegelung (Störung aktiv)",
+          18:"Vorlaufzeit",19:"Nachlaufzeit",51:"Startvorbereitung",55:"Inverter-Störung",98:"Startphase (W:61)"}
 ST_HC_EN  = {0:"Off",1:"Heating normal",2:"Heating comfort",3:"Heating eco",4:"Frost protection",
           5:"Forced offtake",6:"Forced reduction",7:"Holiday",8:"Party",9:"Cooling normal",
           12:"Fault",13:"Manual mode",22:"Cooling external",23:"Heating external",26:"SmartGrid"}
@@ -39,8 +39,8 @@ ST_DHW_EN = {0:"Off",1:"Charging normal",2:"Charging comfort",5:"Fault",6:"Tappi
           8:"Charging reduced",12:"SmartGrid",13:"SmartGrid forced"}
 ST_HP_EN  = {0:"Off",1:"Heating",2:"Active cooling",3:"Blocked",4:"DHW charging",5:"Frost protection",
           6:"Generator temp. too low",7:"Flow too high",8:"Defrosting",9:"Passive cooling",
-          11:"High-pressure fault",12:"Low-pressure fault",16:"Restart",17:"Utility lock (EVU)",
-          18:"Pre-run time",19:"Post-run time",51:"Condenser pump",55:"Inverter fault"}
+          11:"High-pressure fault",12:"Low-pressure fault",16:"Restart lock-out",17:"Lock-out (fault active)",
+          18:"Pre-run time",19:"Post-run time",51:"Start preparation",55:"Inverter fault",98:"Start phase (W:61)"}
 ENUM_EN = {
  1478:{0:"Standby",1:"Week 1",2:"Week 2",4:"Constant",5:"Eco mode",7:"Manual heating",8:"Manual cooling"},
  1496:{0:"Standby",1:"Week 1",2:"Week 2",4:"Constant",6:"Eco mode"},
@@ -55,6 +55,40 @@ def st_txt(table_de, table_en, raw):
 def enum_txt(reg, raw):
     t = (ENUM_EN.get(reg) if curlang() == "en" else None) or ENUM.get(reg, {})
     return t.get(raw, f"Code {raw}")
+
+# ---------- Hoval-Fehlercode (Register 1534) ----------
+# U8, 255 = kein Fehler; sonst gepackt: code + 1 = Klasse·64 + Nummer, Klasse 1 = W(arnung), 2 = B(lockierung),
+# 3 = E (Verriegelung). Eichung: RS485-Ereignisspeicher ↔ ERR.LOG ↔ Volllogger (HoxPi-Doku/RS485_Feldkarte.md, 02./03.09.2026).
+# Die Bedeutungen stammen aus eigener Analyse (Drücke/Temperaturen im Ereignismoment), NICHT aus einer Hoval-Liste.
+FEHLER_KLASSE = {0:("Info","Info"),1:("Warnung","Warning"),2:("Blockierung","Blocking"),3:("Verriegelung","Lock-out")}
+FEHLER_TXT = {
+ "B:02":("Niederdruck im Kältekreis","Refrigerant low pressure"),
+ "E:02":("Niederdruck, verriegelt","Low pressure, locked out"),
+ "W:58":("Zusatzheizung (E-Stab) läuft als Ersatz nach Verriegelung","Electric backup heater running after lock-out"),
+ "W:61":("Sonderzustand in der Verdichter-Startphase","Special state during compressor start-up"),
+ "B:63":("Blockierung bei Service-/Parametereingriff (Muster: vor E:31)","Blocking on service/parameter action (pattern: precedes E:31)"),
+ "E:31":("Verriegelung nach Eingriff/Reset (Muster: nach B:63)","Lock-out after service action/reset (pattern: follows B:63)"),
+ "W:43":("bei Netz-Ein/Neustart beobachtet","seen at power-on/restart"),
+ "B:44":("bei Netz-Ein/Neustart beobachtet","seen at power-on/restart"),
+ "B:01":("in der Anlaufphase beobachtet (Status 51)","seen during start-up (status 51)"),
+}
+def fehlercode_split(raw):
+    """-> ('B:02', klasse_idx, nr) oder None bei 255/ungültig."""
+    if raw is None or raw in (0xFF, 0xFFFF): return None
+    c = int(raw) + 1
+    k, nr = (c >> 6) & 3, c & 63
+    return f"{'IWBE'[k]}:{nr:02d}", k, nr
+def fehlercode_txt(raw):
+    """-> (Text, ist_stoerung) in der aktuellen Sprache."""
+    sp = fehlercode_split(raw)
+    if sp is None: return L("keine Störung", "no fault"), False
+    code, k, _ = sp
+    en = curlang() == "en"
+    kl = FEHLER_KLASSE.get(k, ("", ""))[1 if en else 0]
+    m = FEHLER_TXT.get(code)
+    m = (m[1] if en else m[0]) if m else ""
+    return f"{code} {kl}" + (f" – {m}" if m else "") + f" (Code {int(raw)})", True
+
 # Enum-Texte (Register-spezifisch, aus offizieller Hoval-Tabelle, dt.)
 ENUM = {
  1478:{0:"Standby",1:"Woche 1",2:"Woche 2",4:"Konstant",5:"Sparbetrieb",7:"Hand Heizen",8:"Hand Kühlen"},
@@ -70,7 +104,9 @@ DOMAINS = [
  ("Wärmepumpe", "🔥", [
    (None, [
      (1477,"Außentemperatur","°C",1,True),
-     (1540,"Betriebsstatus","ST_HP",0,False),
+     (1539,"Betriebsstatus","ST_HP",0,False),
+     (1534,"Fehlercode","ERRCODE",0,False),
+     (1540,"Störungsflag","FAULTFLAG",0,False),
      (18726,"Modulation Verdichter","%",0,False),
      (25611,"Elektrische Leistung","kW",2,True),
      (25612,"Heizleistung","kW",0,True),
@@ -139,7 +175,9 @@ DOMAINS = [
 # wird automatisch ein Text aus den Metadaten erzeugt -> jeder Wert hat einen Tooltip.
 DESC = {
  1477:"Aktuelle Außentemperatur (Fühler der Wärmepumpe). Basis für die witterungsgeführte Heizkurve.",
- 1540:"Betriebszustand der Wärmepumpe (z. B. Heizen, Kühlen, Warmwasser, Abtauen, Standby).",
+ 1539:"WEZ-Status des Wärmeerzeugers (Heizen, Kühlen, Warmwasser, Wiedereinschaltsperre, Startvorbereitung, Verriegelung).",
+ 1534:"Hoval-Fehlercode (255 = keine Störung). Klartext W/B/E:Nr = Warnung/Blockierung/Verriegelung; Bedeutungen aus eigener Auswertung des Fehlerspeichers, nicht aus einer Hoval-Liste.",
+ 1540:"Störungsflag: 0 = keine Blockierung/Verriegelung, 8 = Blockierung oder Verriegelung aktiv (Warnungen setzen es nicht).",
  18726:"Aktuelle Verdichterleistung in Prozent. 0 % = aus, 100 % = Volllast.",
  25611:"Momentan aufgenommene elektrische Leistung (Stromverbrauch der Wärmepumpe).",
  25612:"Momentan abgegebene Wärmeleistung an Heizung bzw. Warmwasser.",
@@ -184,7 +222,9 @@ DESC = {
 # Übersetzung der Bezeichnungen (Bereiche, Unterüberschriften, Wertnamen) für die Werte-Seite
 DESC_EN = {
  1477:"Current outdoor temperature (heat-pump sensor). Basis for the weather-compensated heating curve.",
- 1540:"Operating state of the heat pump (e.g. heating, cooling, hot water, defrosting, standby).",
+ 1539:"Heat-generator status (heating, cooling, hot water, restart lock-out, start preparation, lock-out).",
+ 1534:"Hoval fault code (255 = no fault). Plain text W/B/E:no = warning/blocking/lock-out; meanings from our own analysis of the fault memory, not from a Hoval list.",
+ 1540:"Fault flag: 0 = no blocking/lock-out, 8 = blocking or lock-out active (warnings do not set it).",
  18726:"Current compressor output in percent. 0 % = off, 100 % = full load.",
  25611:"Electrical power currently drawn (power consumption of the heat pump).",
  25612:"Thermal output currently delivered to heating or hot water.",
@@ -246,7 +286,7 @@ TR_LABEL = {
  "➡️ Zuluft — in die Räume":"➡️ Supply air — into the rooms",
  "🏠 Abluft — Raumluft aus den Räumen (raus)":"🏠 Extract air — room air from the rooms (out)",
  "🌬️ Fortluft — Ausstoß nach draußen":"🌬️ Exhaust air — expelled outside",
- "Außentemperatur":"Outdoor temperature","Betriebsstatus":"Operating status","Modulation Verdichter":"Compressor modulation",
+ "Außentemperatur":"Outdoor temperature","Betriebsstatus":"Operating status","Fehlercode":"Fault code","Störungsflag":"Fault flag","Modulation Verdichter":"Compressor modulation",
  "Elektrische Leistung":"Electrical power","Heizleistung":"Heating power","Effizienz (Arbeitszahl)":"Efficiency (COP)",
  "Wasserdruck":"Water pressure","Rücklauf Wärmeerzeuger":"Return (heat generator)","WEZ-Temperatur":"Heat generator temp.",
  "Leistungs-Sollwert":"Output setpoint","Anforderung an Wärmeerzeuger":"Demand on heat generator",
@@ -516,7 +556,13 @@ def fmt(raw, unit, dec, signed):
     if raw is None: return "—", "muted"
     if unit == "ST_HC":  return st_txt(ST_HC, ST_HC_EN, raw), ("bad" if raw == 12 else "ok")
     if unit == "ST_DHW": return st_txt(ST_DHW, ST_DHW_EN, raw), ("bad" if raw == 5 else "ok")
-    if unit == "ST_HP":  return st_txt(ST_HP, ST_HP_EN, raw), "ok"
+    if unit == "ST_HP":  return st_txt(ST_HP, ST_HP_EN, raw), ("bad" if raw in (11, 12, 17, 55) else "ok")
+    if unit == "ERRCODE":
+        txt, bad = fehlercode_txt(raw)
+        return txt, ("bad" if bad else "ok")
+    if unit == "FAULTFLAG":
+        if raw in (0xFF, 0xFFFF): return "—", "muted"
+        return (L("Blockierung/Verriegelung aktiv", "blocking/lock-out active"), "bad") if raw else (L("keine", "none"), "ok")
     if unit == "PWRSET":
         # reg 18767: S16/10. -127,0 = Ungueltig-Marker, -100,0 = gueltig "fordert nichts an"
         v = (raw - 65536 if raw > 32767 else raw) / 10.0
