@@ -48,32 +48,43 @@ ENUM_EN = {
  23631:{0:"Off / standby",1:"Normal operation",2:"VOC mode",3:"Humidity mode",4:"Frost protection",
         5:"CoolVet (cooling)",6:"Fault",7:"Summer humidity",8:"Switch-off stop"},
 }
-# ---------- Wartezustand „Kühlen angefordert, Kältekreisregler wartet auf Kreis-Temperatur" (Backlog #15b) ----------
-# Befund RS485 03.09.2026 (HoxPi-Doku/RS485_Feldkarte.md 15:xx/16:xx): Der Kältekreisregler nimmt eine Kühl-Anforderung
-# erst an, wenn der Rücklauf seines Wasserkreises (Register 1535, = WP-RL 60-7-258) ≈ 19,4–19,5 °C erreicht hat. Darunter
-# passiert nichts (WEZ-Status 0, keine Pumpe, keine Sperre) — nach einem 5-min-Kühl-Kurzlauf (Kreis 11–14 °C) dauert das
-# je nach Bodenwärme 30 min bis 3 h. Kein Fehler, aber ohne Hinweis sieht es nach „ignorierter Anforderung" aus.
-KUEHL_START_MIN_RL = 19.5
+# ---------- Wartezustand „Kühlen angefordert, Kältekreisregler wartet auf Kreis-Temperatur" (Backlog #15b, korr. 17:xx) ----------
+# Befund RS485 03.09.2026 (HoxPi-Doku/RS485_Feldkarte.md 15:xx–17:xx): Der Kältekreisregler nimmt eine Kühl-Anforderung
+# erst an, wenn sein VORLAUF (Register 1525 „WEZ-Temperatur" = WP-VL 60-7-257 = pCO dp 17) ≥ 19,25 °C liegt (im 0,5-K-Raster
+# des Reglers = 19,5) und danach noch einige Minuten vergangen sind (4–14 min, Integral/Filter — genaue Regel offen). Der
+# Rücklauf 1535 ist NICHT das Kriterium (fünfter Lauf 16:43 und 3 von 4 Episoden 01./02.09. starteten bei RL 19,0).
+# Darunter passiert nichts (WEZ-Status 0, keine Pumpe, keine Sperre) — nach einem 5-min-Kühl-Kurzlauf (Kreis 11–14 °C)
+# dauert das je nach Bodenwärme 30 min bis 3 h. Kein Fehler, aber ohne Hinweis sieht es nach „ignorierter Anforderung" aus.
+KUEHL_START_MIN_VL = 19.5
 def kuehl_wartet(vals):
-    """-> Rücklauf (float, °C), wenn HK1 1501 = 22 (Kühlen extern) + UKA-Ventil 19870 = 1 + WEZ-Status 1539 = 0
-    + Rücklauf 1535 < KUEHL_START_MIN_RL; sonst None."""
+    """-> dict(vl=float °C, erreicht=bool), wenn HK1 1501 = 22 (Kühlen extern) + UKA-Ventil 19870 = 1 + WEZ-Status 1539 = 0
+    (Anforderung steht, Verdichter aus); erreicht = Vorlauf 1525 >= KUEHL_START_MIN_VL (Startfreigabe folgt); sonst None."""
     try:
         if vals.get(1539) != 0 or vals.get(1501) != 22 or vals.get(19870) != 1: return None
-        rl = vals.get(1535)
-        if rl is None or rl in (0xFFFF, 0x8000): return None
-        rl = (rl - 65536 if rl > 32767 else rl) / 10.0
-        return rl if rl < KUEHL_START_MIN_RL else None
+        vl = vals.get(1525)
+        if vl is None or vl in (0xFFFF, 0x8000): return None
+        vl = (vl - 65536 if vl > 32767 else vl) / 10.0
+        return {"vl": vl, "erreicht": vl >= KUEHL_START_MIN_VL}
     except Exception:
         return None
-def kuehl_wartet_txt(rl):
-    r = f"{rl:.1f}".replace(".", ","); s = f"{KUEHL_START_MIN_RL:.1f}".replace(".", ",")
-    return L(f"Kühlen angefordert – die Wärmepumpe wartet, bis der Rücklauf ≥ {s} °C ist (jetzt {r} °C). "
-             "Kein Fehler: der Kältekreisregler startet den Verdichter nicht mit kaltem Wasserkreis; nach einem "
-             "5-min-Kühl-Kurzlauf dauert das oft 30 min bis 3 h, bis der Fußboden das Wasser wieder erwärmt hat.",
-             f"Cooling requested – the heat pump waits until the return temperature is ≥ {KUEHL_START_MIN_RL:.1f} °C "
-             f"(now {rl:.1f} °C). Not a fault: the refrigeration controller does not start the compressor with a cold "
-             "water circuit; after a 5-min short cooling run this often takes 30 min to 3 h until the floor has "
-             "warmed the water again.")
+def kuehl_wartet_txt(kw):
+    vl = kw["vl"]; r = f"{vl:.1f}".replace(".", ","); s = f"{KUEHL_START_MIN_VL:.1f}".replace(".", ",")
+    if kw["erreicht"]:
+        return L(f"Kühlen angefordert – WP-Vorlauf {r} °C hat die Startmarke {s} °C erreicht; die Startfreigabe des "
+                 "Kältekreisreglers folgt erfahrungsgemäß innerhalb von 5–15 Minuten (Verdichter danach ≈ 30 s später).",
+                 f"Cooling requested – heat-pump flow {vl:.1f} °C has reached the start mark {KUEHL_START_MIN_VL:.1f} °C; "
+                 "the refrigeration controller usually releases the start within 5–15 minutes (compressor ≈ 30 s later).")
+    return L(f"Kühlen angefordert – der Kältekreisregler wartet, bis sein Vorlauf (WEZ-Temperatur) ≥ {s} °C ist (jetzt {r} °C). "
+             "Kein Fehler: mit kaltem Wasserkreis startet der Verdichter nicht; nach einem 5-min-Kühl-Kurzlauf dauert es "
+             "oft 30 min bis 3 h, bis der Fußboden das Wasser wieder erwärmt hat.",
+             f"Cooling requested – the refrigeration controller waits until its flow temperature (WEZ) is ≥ "
+             f"{KUEHL_START_MIN_VL:.1f} °C (now {vl:.1f} °C). Not a fault: the compressor does not start with a cold water "
+             "circuit; after a 5-min short cooling run this often takes 30 min to 3 h until the floor has warmed the water again.")
+def kuehl_wartet_status(kw):
+    """Zusatz für den Betriebsstatus 1539 (= 0 „Aus")."""
+    if kw["erreicht"]:
+        return L(" – Startfreigabe folgt", " – start release pending")
+    return L(" – wartet auf Kreis-Temperatur", " – waiting for circuit temperature")
 
 def st_txt(table_de, table_en, raw):
     """Statustext in der aktuellen Sprache; unbekannter Code -> 'Code n'."""
@@ -1719,7 +1730,7 @@ function apost(url, body, msgid){
                     else:
                         txt, cls = fmt(raw, unit, dec, signed)
                         if reg == 1539 and _kw is not None:
-                            txt += L(" – wartet auf Kreis-Temperatur", " – waiting for circuit temperature")
+                            txt += kuehl_wartet_status(_kw)
                     d = html.escape(desc(reg, tl(name), unit))
                     _z = get_labels().get(str(reg))
                     _nm = html.escape(tl(name)) + (f'<span class="ze">{html.escape(_z)}</span>' if _z else "")
