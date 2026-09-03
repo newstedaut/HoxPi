@@ -126,6 +126,11 @@ const hp_reg_t *hp_find_reg(uint16_t reg);                            /* binaere
 /* Alle Zeilen zu (fg,fn,dp) ohne LOW_HALF; liefert Anzahl, schreibt Zeiger nach out[max]. */
 size_t hp_find_by_dp(uint8_t fg, uint8_t fn, uint16_t dp, const hp_reg_t **out, size_t max);
 bool   hp_in_whitelist(uint16_t reg);
+/* Laufzeit-Whitelist (NVS, hoval_cfg.c) ueber die kompilierte legen; regs = NULL -> wieder hp_whitelist[].
+ * Der Zeiger muss dauerhaft gueltig bleiben (hcfg_t liegt statisch). */
+void   hp_whitelist_override(const uint16_t *regs, uint16_t n);
+/* aktive Liste (Kompilat oder Override) fuer Log/Statusseite */
+const uint16_t *hp_whitelist_active(uint16_t *n);
 /* Kanal-Exklusion Heizen<->Kuehlen: Partnerregister oder 0 */
 uint16_t hp_excl_partner(uint16_t reg);
 

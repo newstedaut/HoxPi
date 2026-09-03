@@ -32,14 +32,22 @@ menu "HoxPi Gateway"
         default 35
 
     config HOXPI_POLL_INTERVAL_S
-        int "Poll-Intervall WEZ (s)"
+        int "Poll-Intervall WEZ (s) - Default, NVS 'poll_wez' hat Vorrang"
+        range 5 3600
         default 30
         help
             Pause zwischen zwei GET-Runden ueber alle WEZ-Register (HoxPi: --poll-interval 30).
-            HomeVent-Register werden fest alle 5 s abgefragt.
+            Alle Poll-Werte, die Schreibfreigabe und die Whitelist koennen zur Laufzeit im NVS
+            (Namespace "hoxpi") ueberschrieben werden - siehe main/hoval_cfg.h und tools/gen_esp32_nvs.py.
+
+    config HOXPI_POLL_HV_INTERVAL_S
+        int "Poll-Intervall HomeVent (s) - Default, NVS 'poll_hv' hat Vorrang"
+        range 1 3600
+        default 5
 
     config HOXPI_POLL_DELAY_MS
-        int "Sendeabstand zwischen zwei GET-Frames (ms)"
+        int "Sendeabstand zwischen zwei GET-Frames (ms) - Default, NVS 'poll_delay' hat Vorrang"
+        range 10 2000
         default 100
 
     config HOXPI_MODBUS_PORT
@@ -50,8 +58,9 @@ menu "HoxPi Gateway"
         bool "Schreibpfad Modbus -> CAN freigeben (Whitelist, min/max, Kalt-Cache-Schutz)"
         default n
         help
-            Entspricht --enable-write bei HoxPi. Nur Register der generierten Whitelist
-            (whitelist.json bzw. eingebaute HoxPi-Liste) werden auf den Bus geschrieben.
+            Entspricht --enable-write bei HoxPi. Nur Register der Whitelist (NVS 'whitelist',
+            sonst generierte Liste aus whitelist.json bzw. eingebaute HoxPi-Liste) werden auf den
+            Bus geschrieben. NVS 'wr_en' (0/1) hat Vorrang vor diesem Default.
 
     menu "Ethernet RMII (interner EMAC)"
         depends on HOXPI_ETH_RMII

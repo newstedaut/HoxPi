@@ -3,12 +3,14 @@
  *
  * Aufgaben (Gegenstueck zu HovalBridge.rx_loop/poll_targets in hoval_bridge.py):
  *   RX-Task  : Frames empfangen -> hp_reasm_feed -> Antwort zerlegen -> dekodieren -> store()
- *   Poll-Task: alle Tabellenzeilen zyklisch per GET abfragen (WEZ alle POLL_S Sekunden,
- *              HomeVent alle 5 s), Sendeabstand POLL_DELAY_MS, Bus-Off-Recovery
+ *   Poll-Task: alle Tabellenzeilen zyklisch per GET abfragen (WEZ alle poll_wez_s Sekunden,
+ *              HomeVent alle poll_hv_s), Sendeabstand poll_delay_ms — alle drei zur Laufzeit aus
+ *              hoval_cfg (NVS, sonst Kconfig), Bus-Off-Recovery
  *
  * Noch NICHT auf Hardware getestet (Stand 02.09.2026, kein Board vorhanden). Pins/Bitrate via Kconfig.
  */
 #include "hoval_can.h"
+#include "hoval_cfg.h"
 #include <string.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -25,12 +27,6 @@ static const char *TAG = "hoval_can";
 #endif
 #ifndef CONFIG_HOXPI_CAN_RX_GPIO
 #define CONFIG_HOXPI_CAN_RX_GPIO 35
-#endif
-#ifndef CONFIG_HOXPI_POLL_INTERVAL_S
-#define CONFIG_HOXPI_POLL_INTERVAL_S 30
-#endif
-#ifndef CONFIG_HOXPI_POLL_DELAY_MS
-#define CONFIG_HOXPI_POLL_DELAY_MS 100
 #endif
 
 static hc_store_cb_t s_store;
@@ -126,7 +122,7 @@ static void poll_round(uint16_t unit_id)
         if (dup) continue;
         size_t n = hp_build_get(r->fg, r->fn, r->dp, f);
         tx(arb, f, n);
-        vTaskDelay(pdMS_TO_TICKS(CONFIG_HOXPI_POLL_DELAY_MS));
+        vTaskDelay(pdMS_TO_TICKS(hcfg_get()->poll_delay_ms));
     }
 }
 
@@ -135,13 +131,13 @@ static void poll_wez_task(void *arg)
     (void)arg;
     /* wie hoval_bridge.build_targets(): nur WEZ (UnitId 1) und HomeVent (520); das Puffermodul
      * (143) wird von HoxPi nicht gepollt - seine Datenpunkte antworten ohne PS-Modul ohnehin nie */
-    for (;;) { poll_round(HP_UNIT_WEZ); vTaskDelay(pdMS_TO_TICKS(CONFIG_HOXPI_POLL_INTERVAL_S * 1000)); }
+    for (;;) { poll_round(HP_UNIT_WEZ); vTaskDelay(pdMS_TO_TICKS((uint32_t)hcfg_get()->poll_wez_s * 1000u)); }
 }
 
 static void poll_hv_task(void *arg)
 {
     (void)arg;
-    for (;;) { poll_round(HP_UNIT_HV); vTaskDelay(pdMS_TO_TICKS(5000)); }
+    for (;;) { poll_round(HP_UNIT_HV); vTaskDelay(pdMS_TO_TICKS((uint32_t)hcfg_get()->poll_hv_s * 1000u)); }
 }
 
 bool hc_start(hc_store_cb_t store)
@@ -157,7 +153,9 @@ bool hc_start(hc_store_cb_t store)
     twai_filter_config_t f = TWAI_FILTER_CONFIG_ACCEPT_ALL();
     if (twai_driver_install(&g, &t, &f) != ESP_OK) { ESP_LOGE(TAG, "twai_driver_install fehlgeschlagen"); return false; }
     if (twai_start() != ESP_OK) { ESP_LOGE(TAG, "twai_start fehlgeschlagen"); return false; }
-    ESP_LOGI(TAG, "TWAI 50 kbit/s, TX GPIO %d, RX GPIO %d, %u Register", CONFIG_HOXPI_CAN_TX_GPIO, CONFIG_HOXPI_CAN_RX_GPIO, hp_regs_count);
+    ESP_LOGI(TAG, "TWAI 50 kbit/s, TX GPIO %d, RX GPIO %d, %u Register, Poll WEZ %u s / HV %u s / Abstand %u ms",
+             CONFIG_HOXPI_CAN_TX_GPIO, CONFIG_HOXPI_CAN_RX_GPIO, hp_regs_count,
+             hcfg_get()->poll_wez_s, hcfg_get()->poll_hv_s, hcfg_get()->poll_delay_ms);
 
     xTaskCreate(rx_task, "hoval_rx", 4096, NULL, 10, NULL);
     xTaskCreate(poll_wez_task, "hoval_poll", 3072, NULL, 5, NULL);

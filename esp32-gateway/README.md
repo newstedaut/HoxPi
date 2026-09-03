@@ -59,12 +59,16 @@ esp32-gateway/
 │   │                        Bus-Off-Recovery, „schon vom CAN gelesen"-Bitmap (Kalt-Cache-Schutz)
 │   ├── hoval_modbus.[ch]    esp-modbus TCP-Slave :502, ein Holding-Bereich je Registerblock, Schreibpfad =
 │   │                        HoxPi-on_write (Whitelist → Kalt-Cache → min/max → Rate-Limit → SET; Exklusion)
-│   ├── main.c               Ethernet (RMII-PHY oder W5500/SPI per Kconfig) → IP → Modbus → CAN → Status-Log
-│   ├── Kconfig.projbuild    Board (Olimex ESP32-EVB / Waveshare S3-POE / eigenes), Pins, Poll, Port, Schreibfreigabe
+│   ├── hoval_cfg.[ch]       Laufzeit-Konfiguration (reines C): Poll-Intervalle, Schreibfreigabe, Whitelist-Text
+│   │                        ↔ Liste, Grenzen, Validierung gegen die Tabelle, Override der kompilierten Whitelist
+│   ├── hoval_cfg_nvs.c      NVS-Anbindung dazu (Namespace „hoxpi": poll_wez, poll_hv, poll_delay, wr_en, whitelist)
+│   ├── main.c               NVS → Konfig → Ethernet (RMII-PHY oder W5500/SPI per Kconfig) → IP → Modbus → CAN → Status-Log
+│   ├── Kconfig.projbuild    Board (Olimex ESP32-EVB / Waveshare S3-POE / eigenes), Pins, Poll-Defaults, Port, Schreibfreigabe
 │   ├── regmap.c             bindet regmap_gen.h (generiert, nicht im Repo) oder regmap_example.h ein
 │   └── regmap_example.h     20 allgemein bekannte Register, damit das Projekt ohne Hoval-Liste kompiliert
 ├── test/                    Host-Test ohne ESP-IDF: `make test` (gcc) und `make syntax` (Stub-Header)
-└── ../tools/gen_esp32_regmap.py   registers.json (+ whitelist.json) → main/regmap_gen.h
+├── ../tools/gen_esp32_regmap.py   registers.json (+ whitelist.json) → main/regmap_gen.h
+└── ../tools/gen_esp32_nvs.py      whitelist.json / Poll-Werte → CSV für nvs_partition_gen.py (Konfig ohne Neubau)
 ```
 
 ### Registerkarte erzeugen (lokal, wie bei HoxPi)
@@ -79,10 +83,38 @@ erkannt, wie in der Bridge), 27 Modbus-Bereiche = 1,5 KB RAM.** `--stats` zeigt 
 ### Bauen
 ```bash
 idf.py set-target esp32        # Olimex ESP32-EVB   (oder: esp32s3 für Waveshare S3-POE-ETH)
-idf.py menuconfig              # „HoxPi Gateway": Board, CAN-Pins, Ethernet, Schreibfreigabe
+idf.py menuconfig              # „HoxPi Gateway": Board, CAN-Pins, Ethernet, Poll-Defaults, Schreibfreigabe
 idf.py build flash monitor
 ```
 Ohne `regmap_gen.h` baut CMake mit Warnung die Beispieltabelle ein.
+
+### Konfiguration zur Laufzeit (NVS, ohne Neubau) — wie hoxpi.json / whitelist.json bei HoxPi
+Beim Start liest das Gateway den NVS-Namespace **`hoxpi`**; jeder vorhandene Schlüssel überschreibt den
+Kconfig-/Kompilat-Wert, fehlende Schlüssel lassen ihn stehen (`main/hoval_cfg.h`):
+
+| Schlüssel    | Typ    | Bedeutung                                             | Grenzen   | Kompilat-Default            |
+|--------------|--------|-------------------------------------------------------|-----------|-----------------------------|
+| `poll_wez`   | u16    | Sekunden zwischen zwei WEZ-Poll-Runden                | 5…3600    | `HOXPI_POLL_INTERVAL_S` 30  |
+| `poll_hv`    | u16    | Sekunden zwischen zwei HomeVent-Runden                | 1…3600    | `HOXPI_POLL_HV_INTERVAL_S` 5 |
+| `poll_delay` | u16    | Millisekunden zwischen zwei GET-Frames                | 10…2000   | `HOXPI_POLL_DELAY_MS` 100   |
+| `wr_en`      | u8     | 0/1 Schreibpfad Modbus → CAN                          | 0/1       | `HOXPI_ENABLE_WRITE`        |
+| `whitelist`  | string | `"1490,1497,27509"` — schreibbare Register            | ≤ 128 Einträge, ≤ 1024 Zeichen | `hp_whitelist[]` aus `regmap_gen.h` |
+
+Whitelist-Regeln: Schlüssel vorhanden = ersetzt die kompilierte Liste vollständig (leer = nichts schreibbar);
+Register, die nicht in der Tabelle stehen oder Low-Wörter von 32-bit-Paaren sind, werden beim Start mit
+Warnung verworfen; Register ohne „writable" in Hovals Liste bleiben erlaubt und werden nur gemeldet
+(HoxPi prüft ebenfalls nur die Mitgliedschaft). Ungültige Zahlen/Syntaxfehler → Warnung, Default bleibt.
+Das Start-Log zeigt die wirksame Konfiguration („Konfig: Poll WEZ 30 s, … Whitelist 25 Register (NVS)").
+
+Befüllen ohne Board-Konsole — aus der HoxPi-`whitelist.json`:
+```bash
+python3 tools/gen_esp32_nvs.py -w whitelist.json -r registers.json --poll-wez 30 --enable-write -o nvs_config.csv
+python3 $IDF_PATH/components/nvs_flash/nvs_partition_generator/nvs_partition_gen.py generate nvs_config.csv nvs.bin 0x6000
+esptool.py -p /dev/ttyUSB0 write_flash 0x9000 nvs.bin     # Offset/Größe der nvs-Partition: partitions.csv
+```
+`-r registers.json` prüft die Whitelist vorab gegen die Tabelle. Nur angegebene Schlüssel landen in der CSV
+(z. B. nur `--poll-wez 60` → Whitelist bleibt Kompilat). `idf.py erase-flash` löscht alles → Kompilat-Defaults.
+`hcfg_nvs_save()`/`hcfg_nvs_reset()` stehen für die geplante Statusseite/Konsole bereit.
 
 ### Testen ohne Hardware
 ```bash
@@ -91,10 +123,12 @@ make test                                # Frames/Dekodierung gegen bridge/hoval
 make REGMAP=../main/regmap_gen.h test    # dasselbe mit der echten Tabelle
 make syntax                              # gcc -fsyntax-only der IDF-Module gegen test/idf_stubs/
 ```
-Stand 02.09.2026: Referenzvergleich **29/29 Zeilen identisch** mit der Python-Bridge (GET/SET-Bytes,
+Stand 03.09.2026: Referenzvergleich **29/29 Zeilen identisch** mit der Python-Bridge (GET/SET-Bytes,
 Arbitration-IDs, alle Typen inkl. S16-Negativ, 32-bit-Split), Reassembly-Tests (Einzel-, Mehrfachframe,
-Timeout/Verdrängung, Fremd-Devkey) und Tabellen-Tests (Sortierung, Low-Wort-Ausschluss, Bereiche) grün —
-mit Beispiel- **und** echter 555er-Tabelle.
+Timeout/Verdrängung, Fremd-Devkey), Tabellen-Tests (Sortierung, Low-Wort-Ausschluss, Bereiche) und
+Konfig-Tests (`test_cfg.c`: Grenzen, Whitelist-Parser 14 Fälle, Validierung, Override) grün —
+mit Beispiel- **und** echter 555er-Tabelle. Hinweis: `test_proto` erwartet 1490 in der Whitelist
+(HoxPi-Standardliste); eine eigene `whitelist.json` ohne 1490 lässt diese Assertion anschlagen.
 
 ## Status / Ehrlichkeit
 - **Kein Board vorhanden → kein Hardware-Test.** Protokollkern ist gegen die laufende HoxPi-Bridge
@@ -105,10 +139,14 @@ mit Beispiel- **und** echter 555er-Tabelle.
   Wiki/Schaltplan abgleichen. Olimex ESP32-EVB: CAN TX 5 / RX 35, LAN8710 PHY 0, MDC 23, MDIO 18.
 - **esp-modbus 2.x** hat eine Handle-basierte API (`mbc_slave_create_tcp`, `mbc_slave_start(handle)` …);
   `idf_component.yml` pinnt deshalb `^1.0.15`.
-- Offen für die nächsten Schritte: Whitelist zur Laufzeit (NVS statt Kompilat), Web-Status-Seite,
-  MQTT/HA-Discovery wie bei HoxPi, OTA.
+- **NVS-Konfiguration ist nur gegen Stub-Header geprüft** (`nvs_open/get/set`-Aufrufe nach IDF-5.x-API);
+  der erste `idf.py build` und ein Start-Log mit „Konfig: …" bestätigen sie.
+- Offen für die nächsten Schritte: Web-Status-/Konfigseite (`/status` JSON wie HoxPi-Bridge :8809, Whitelist
+  per HTTP → `hcfg_nvs_save()`), MQTT/HA-Discovery wie bei HoxPi, OTA.
 
 ## Historie
 - 01.09.2026 Firmware-Groundwork (dieses README).
 - 02.09.2026 Code-Skelett komplett (Protokollkern, CAN, Modbus, Netz, Kconfig), Registerkarten-Generator,
   Host-Testsuite mit Python-Referenzvergleich.
+- 03.09.2026 Laufzeit-Konfiguration aus NVS (`hoval_cfg.[ch]`, `hoval_cfg_nvs.c`): Poll-Intervalle WEZ/HV/Abstand,
+  Schreibfreigabe und Whitelist ohne Neubau; `tools/gen_esp32_nvs.py` (whitelist.json → NVS-CSV); `test_cfg.c`.

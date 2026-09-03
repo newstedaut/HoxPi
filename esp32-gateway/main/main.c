@@ -1,8 +1,9 @@
 /*
  * main.c — HoxPi-ESP32: Hoval-CAN -> Modbus-TCP-Gateway (ESP-IDF >= 5.3)
  *
- * Ablauf: NVS/Netif/Event-Loop -> Ethernet (RMII-PHY oder W5500-SPI, je Kconfig) -> auf IP warten
- *         -> Modbus-Slave (hoval_modbus.c) -> CAN (hoval_can.c) -> Status-Task (Log alle 60 s).
+ * Ablauf: NVS/Netif/Event-Loop -> Laufzeit-Konfiguration (hoval_cfg: Kconfig-Defaults, NVS-Namespace "hoxpi"
+ *         ueberschreibt Poll-Intervalle/Schreibfreigabe/Whitelist) -> Ethernet (RMII-PHY oder W5500-SPI, je Kconfig)
+ *         -> auf IP warten -> Modbus-Slave (hoval_modbus.c) -> CAN (hoval_can.c) -> Status-Task (Log alle 60 s).
  * Noch NICHT auf Hardware getestet (02.09.2026, kein Board). Pins in Kconfig.projbuild je Board.
  */
 #include <string.h>
@@ -24,9 +25,12 @@
 #include "hoval_proto.h"
 #include "hoval_can.h"
 #include "hoval_modbus.h"
+#include "hoval_cfg.h"
 
 static const char *TAG = "hoxpi";
 static EventGroupHandle_t s_ev;
+
+static void cfg_warn(const char *msg, uint16_t reg) { ESP_LOGW(TAG, "%s: reg %u", msg, reg); }
 #define EV_GOT_IP BIT0
 
 static void on_got_ip(void *arg, esp_event_base_t base, int32_t id, void *data)
@@ -118,6 +122,20 @@ void app_main(void)
     esp_err_t r = nvs_flash_init();
     if (r == ESP_ERR_NVS_NO_FREE_PAGES || r == ESP_ERR_NVS_NEW_VERSION_FOUND) { ESP_ERROR_CHECK(nvs_flash_erase()); r = nvs_flash_init(); }
     ESP_ERROR_CHECK(r);
+
+    /* Laufzeit-Konfiguration: Kconfig-Defaults, dann NVS drueber, dann Whitelist einhaengen */
+    hcfg_defaults(hcfg_mut(), CONFIG_HOXPI_POLL_INTERVAL_S, CONFIG_HOXPI_POLL_HV_INTERVAL_S,
+                  CONFIG_HOXPI_POLL_DELAY_MS, CONFIG_HOXPI_ENABLE_WRITE);
+    hcfg_nvs_load(hcfg_mut());
+    size_t dropped = hcfg_apply(hcfg_mut(), cfg_warn);
+    {
+        uint16_t wn = 0; hp_whitelist_active(&wn);
+        const hcfg_t *c = hcfg_get();
+        ESP_LOGI(TAG, "Konfig: Poll WEZ %u s, HV %u s, Abstand %u ms, Schreiben %s, Whitelist %u Register (%s%s), NVS-Quellen 0x%02x",
+                 c->poll_wez_s, c->poll_hv_s, c->poll_delay_ms, c->enable_write ? "AN" : "AUS", wn,
+                 c->wl_override ? "NVS" : "Kompilat", dropped ? ", Eintraege verworfen" : "", c->from_nvs);
+    }
+
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     s_ev = xEventGroupCreate();
@@ -126,7 +144,7 @@ void app_main(void)
     ESP_LOGI(TAG, "warte auf IP (DHCP) ...");
     xEventGroupWaitBits(s_ev, EV_GOT_IP, pdFALSE, pdTRUE, portMAX_DELAY);
 
-    if (!hm_start(netif, CONFIG_HOXPI_ENABLE_WRITE)) { ESP_LOGE(TAG, "Modbus-Start fehlgeschlagen - Neustart in 10 s"); vTaskDelay(pdMS_TO_TICKS(10000)); esp_restart(); }
+    if (!hm_start(netif, hcfg_get()->enable_write)) { ESP_LOGE(TAG, "Modbus-Start fehlgeschlagen - Neustart in 10 s"); vTaskDelay(pdMS_TO_TICKS(10000)); esp_restart(); }
     if (!hc_start(hm_store))                          { ESP_LOGE(TAG, "CAN-Start fehlgeschlagen - Neustart in 10 s");    vTaskDelay(pdMS_TO_TICKS(10000)); esp_restart(); }
     xTaskCreate(status_task, "hoxpi_status", 3072, NULL, 2, NULL);
     ESP_LOGI(TAG, "bereit: Loxone kann Modbus-TCP :%d lesen (Templates wie HoxPi)", CONFIG_HOXPI_MODBUS_PORT);

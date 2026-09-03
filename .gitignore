@@ -28,3 +28,6 @@ esp32-gateway/managed_components/
 esp32-gateway/dependencies.lock
 esp32-gateway/test/test_proto
 esp32-gateway/test/out_*.txt
+esp32-gateway/test/test_cfg
+nvs_config.csv
+nvs.bin
