@@ -16,7 +16,7 @@ R16 = {
  "hoval_hc1_status": (1501, 1, False),
  "hoval_hc2_status": (1502, 1, False),
  "hoval_ww_status": (1504, 1, False),
- "hoval_wp_detailstatus": (18723, 0.1, False),
+ "hoval_wp_detailstatus": (18723, 1, False),   # U8 WEZ-Statuscode (Backlog #14: vorher 0,1 -> 5.1/1.6 statt 51/16)
  "hoval_sg_status": (27537, 1, False),
  "hoval_sg_befehl": (27545, 1, False),
  "hoval_offset_ww_k": (27509, 0.1, True),
@@ -69,6 +69,7 @@ R32 = {
 COUNTER32 = ("mwh", "zyklen", "betriebsstunden")
 HELP = {
  "hoval_hc1_status": "0=Aus 1..3=Heizen 9..11=Kuehlen 12=Stoerung 26=SmartGrid",
+ "hoval_wp_detailstatus": "Register 18723 FA-Status = WEZ-Statuscode wie hoval_wez_status (0/1/2/4/16/17/51/98), seit 03.09.2026 Faktor 1",
  "hoval_wez_status": "0=Aus 1=Heizen 2=Kuehlen 4=Warmwasser 16=Wiedereinschaltsperre 17=Verriegelung(Stoerung) 51=Startvorbereitung 98=Startphase(W:61)",
  "hoval_fehlercode": "255=OK, sonst gepackt: code+1 = Klasse*64+Nr (Klasse 1=W 2=B 3=E), Klartext in hoval_fehlercode_info",
  "hoval_fehlercode_info": "aktiver Hoval-Fehler als Label code=W/B/E:nn (nur wenn 1534 != 255)",
