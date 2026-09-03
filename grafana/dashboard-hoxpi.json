@@ -3,7 +3,7 @@
   "title": "HoxPi Wärmepumpe",
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 2,
+  "version": 3,
   "refresh": "1m",
   "time": {
     "from": "now-24h",
@@ -497,12 +497,16 @@
                   "index": 4
                 },
                 "17": {
-                  "text": "Status 17",
+                  "text": "Verriegelung (Störung)",
                   "index": 5
                 },
                 "51": {
                   "text": "Startvorbereitung",
                   "index": 6
+                },
+                "98": {
+                  "text": "Startphase (W:61)",
+                  "index": 7
                 }
               }
             }
@@ -540,6 +544,10 @@
               {
                 "color": "#73BF69",
                 "value": 51
+              },
+              {
+                "color": "#FADE2A",
+                "value": 98
               }
             ]
           }
@@ -596,6 +604,212 @@
       ]
     },
     {
+      "id": 17,
+      "type": "stat",
+      "title": "Aktiver Fehler (1534, Klartext)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "hoxpi-prom"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 50
+      },
+      "description": "Hoval-Fehlercode aus Register 1534 als W/B/E:nn (Warnung/Blockierung/Verriegelung). Leer = 255 = keine Störung. Bedeutungen: B:02/E:02 Niederdruck, W:58 E-Stab nach Verriegelung, W:61 Startphase, B:63/E:31 Sammelstörung.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "keine Störung",
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "name",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "expr": "hoval_fehlercode_info",
+          "legendFormat": "{{code}}",
+          "instant": true,
+          "range": false,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "type": "stat",
+      "title": "Störungsflag (1540)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "hoxpi-prom"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 50
+      },
+      "description": "Register 1540: 0 = keine, 8 = Blockierung/Verriegelung aktiv (nur bei B:63/E:31 gesehen; Warnungen setzen es nicht).",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "—",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "keine",
+                  "index": 0
+                },
+                "8": {
+                  "text": "Blockierung / Verriegelung",
+                  "index": 1
+                }
+              }
+            }
+          ],
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "expr": "hoval_stoerungsflag",
+          "legendFormat": "1540",
+          "instant": true,
+          "range": false,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 19,
+      "type": "bargauge",
+      "title": "Fehler im Zeitraum [min aktiv]",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "hoxpi-prom"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 12,
+        "x": 12,
+        "y": 50
+      },
+      "description": "Minuten je Fehlercode im gewählten Zeitraum (Scrape 30 s → Samples × 0,5). Leer = keine Störung im Zeitraum.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "m",
+          "noValue": "keine Störung im Zeitraum",
+          "min": 0,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "orange",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 60
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "horizontal",
+        "displayMode": "gradient",
+        "showUnfilled": true,
+        "valueMode": "color",
+        "namePlacement": "auto",
+        "minVizHeight": 16,
+        "minVizWidth": 8
+      },
+      "targets": [
+        {
+          "expr": "sum by (code) (count_over_time(hoval_fehlercode_info[$__range])) * 0.5",
+          "legendFormat": "{{code}}",
+          "instant": true,
+          "range": false,
+          "refId": "A"
+        }
+      ]
+    },
+    {
       "id": 13,
       "type": "timeseries",
       "title": "Wärmemenge pro Tag [kWh]",
@@ -607,7 +821,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 50
+        "y": 55
       },
       "fieldConfig": {
         "defaults": {
@@ -653,7 +867,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 50
+        "y": 55
       },
       "fieldConfig": {
         "defaults": {
@@ -694,7 +908,7 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 58
+        "y": 63
       },
       "fieldConfig": {
         "defaults": {
@@ -747,7 +961,7 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 58
+        "y": 63
       },
       "fieldConfig": {
         "defaults": {
