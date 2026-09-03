@@ -37,6 +37,7 @@ R16 = {
  # --- FA-Ebene fg=60/fn=254 + Anlageleistung (Backlog #8, 02.09.2026) ---
  "hoval_wez_status": (1539, 1, False),
  "hoval_fehlercode": (1534, 1, False),
+ "hoval_stoerungsflag": (1540, 1, False),
  "hoval_leistung_soll_heizen_pct": (18764, 0.1, True),
  "hoval_leistung_soll_ww_pct": (18765, 0.1, True),
  "hoval_leistung_soll_kuehlen_pct": (18766, 0.1, True),
@@ -68,8 +69,10 @@ R32 = {
 COUNTER32 = ("mwh", "zyklen", "betriebsstunden")
 HELP = {
  "hoval_hc1_status": "0=Aus 1..3=Heizen 9..11=Kuehlen 12=Stoerung 26=SmartGrid",
- "hoval_wez_status": "0=Aus 1=Heizen 2=Kuehlen 4=Warmwasser 16=Wiedereinschaltsperre 51=Startvorbereitung",
- "hoval_fehlercode": "255=OK, sonst Hoval-Fehlercode",
+ "hoval_wez_status": "0=Aus 1=Heizen 2=Kuehlen 4=Warmwasser 16=Wiedereinschaltsperre 17=Verriegelung(Stoerung) 51=Startvorbereitung 98=Startphase(W:61)",
+ "hoval_fehlercode": "255=OK, sonst gepackt: code+1 = Klasse*64+Nr (Klasse 1=W 2=B 3=E), Klartext in hoval_fehlercode_info",
+ "hoval_fehlercode_info": "aktiver Hoval-Fehler als Label code=W/B/E:nn (nur wenn 1534 != 255)",
+ "hoval_stoerungsflag": "Register 1540: 0=keine, 8=Blockierung/Verriegelung aktiv",
  "hoval_leistung_soll_aktiv_pct": "aktiver Leistungs-Sollwert (-100=keine Anforderung; -127=ungueltig wird unterdrueckt)",
  "hoval_wp_pumpe_pct": "Drehzahl WP-Umwaelzpumpe (0=aus)",
  "hoval_ww_status": "0=Aus 1=Laden 8=Laden reduziert 12=SmartGrid",
@@ -119,6 +122,12 @@ def metrics():
         if name in HELP: out.append(f"# HELP {name} {HELP[name]}")
         out.append(f"# TYPE {name} gauge")
         out.append(f"{name} {round(v*sc, 3)}")
+        if name == "hoval_fehlercode" and v != 255:
+            # gepackter Hoval-Code: code+1 = Klasse*64 + Nr  (W/B/E = Warnung/Blockierung/Verriegelung)
+            c = int(v) + 1
+            out.append(f"# HELP hoval_fehlercode_info {HELP['hoval_fehlercode_info']}")
+            out.append("# TYPE hoval_fehlercode_info gauge")
+            out.append('hoval_fehlercode_info{code="%s:%02d"} 1' % ("IWBE"[(c >> 6) & 3], c & 63))
     for name, spec in R32.items():
         reg, sc = spec[0], spec[1]; sg = len(spec) > 2 and spec[2]
         w = rd(reg, 2)

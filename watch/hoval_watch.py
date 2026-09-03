@@ -65,7 +65,8 @@ def collect_alerts(conf, state):
 
     fc = rd(1534)
     if fc is not None and fc[0] not in (0, 255):
-        active["stoerung_fa"] = f"Feuerungsautomat meldet Fehlercode {fc[0]}"
+        _c = fc[0] + 1  # Hoval: code+1 = Klasse*64+Nr, W/B/E = Warnung/Blockierung/Verriegelung
+        active["stoerung_fa"] = "Wärmeerzeuger meldet Fehler %s:%02d (Code %d)" % ("IWBE"[(_c >> 6) & 3], _c & 63, fc[0])
 
     for reg, label in ((1501, "HK1"), (1502, "HK2")):
         v = rd(reg)
