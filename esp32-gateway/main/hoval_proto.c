@@ -206,10 +206,25 @@ size_t hp_find_by_dp(uint8_t fg, uint8_t fn, uint16_t dp, const hp_reg_t **out, 
     return n;
 }
 
+static const uint16_t *s_wl_over = NULL;   /* Laufzeit-Whitelist (NVS), sonst Kompilat */
+static uint16_t        s_wl_over_n = 0;
+
+void hp_whitelist_override(const uint16_t *regs, uint16_t n)
+{
+    s_wl_over = regs; s_wl_over_n = regs ? n : 0;
+}
+
+const uint16_t *hp_whitelist_active(uint16_t *n)
+{
+    if (s_wl_over) { *n = s_wl_over_n; return s_wl_over; }
+    *n = hp_whitelist_count; return hp_whitelist;
+}
+
 bool hp_in_whitelist(uint16_t reg)
 {
-    for (uint16_t i = 0; i < hp_whitelist_count; i++)
-        if (hp_whitelist[i] == reg) return true;
+    uint16_t n; const uint16_t *wl = hp_whitelist_active(&n);
+    for (uint16_t i = 0; i < n; i++)
+        if (wl[i] == reg) return true;
     return false;
 }
 
