@@ -35,6 +35,7 @@ class _FehlerEnum(dict):
     def get(self, raw, default=None):
         raw = int(raw)
         if raw == 255: return "OK"
+        if raw == 0: return "kein Wert"  # FA antwortet nicht (z. B. nach Netz-Ein), keine Stoerung
         c = raw + 1; code = "%s:%02d" % ("IWBE"[(c >> 6) & 3], c & 63)
         return code + (" " + FEHLER_TXT[code] if code in FEHLER_TXT else "")
 FEHLER_ENUM = _FehlerEnum()
