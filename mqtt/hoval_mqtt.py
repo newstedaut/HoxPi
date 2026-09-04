@@ -324,6 +324,9 @@ def main():
                 _cop = ((hl[0] << 16) | hl[1]) / 10
                 try: _copf = json.load(open("/home/admin/hoxpi-features.json")).get("cop_filter",{}).get("enabled",True)
                 except Exception: _copf = True
+                if _copf:  # COP-Startfilter: Pel < 0,5 kW (Anlauf) -> COP 0
+                    _pel = mb_read(25611, 1)
+                    if not _pel or _pel[0] in (0x8000, 0xFFFF) or _pel[0] < 50: _cop = 0.0
                 if (not _copf) or (0 <= _cop <= 20):  # COP-Plausibilitaet
                     c.publish(f"{BASE}/cop/state", _cop, retain=True)
         except Exception:

@@ -127,6 +127,15 @@ def _r32(reg, dec=0):
     v = (w[0] << 16) | w[1]
     return round(v / (10 ** dec), dec) if dec else v
 
+def _cop_gated():
+    """COP 31667/68 (dec1); COP-Startfilter: in den ersten ~25 s eines Laufs liefert der FA Unsinn,
+    weil Pel noch ~0 ist -> 0 zurueckgeben, solange 25611 < 0,5 kW."""
+    cop = _r32(31667, 1)
+    pel = _rd(25611)
+    if not pel or pel[0] in (0x8000, 0xFFFF) or pel[0] < 50:
+        return 0.0
+    return cop
+
 def _name(reg):
     t = _texts().get(str(reg), {})
     return t.get("nd") or _regmap().get(reg, {}).get("name", "")
@@ -149,7 +158,7 @@ def get_status() -> dict:
         "wasserdruck_bar": g(18738),
         "leistung_elektrisch_kw": g(25611), "leistung_thermisch_kw": g(25612),
         "modulation_prozent": g(18726),
-        "cop_aktuell": _r32(31667, 1),  # nur im laufenden Betrieb ungleich 0
+        "cop_aktuell": _cop_gated(),  # nur im laufenden Betrieb ungleich 0; COP-Startfilter (Pel < 0,5 kW -> 0)
         "jahresarbeitszahl": g(27467),  # JAZ/SPF - verlässlicher Langzeit-Effizienzwert
         "wp_detailstatus": {"code": (hp or [None])[0] and round((hp[0]) / 10),
                             "text": ST_HP.get(hp and round(hp[0] / 10), "?") if hp else "?"},
