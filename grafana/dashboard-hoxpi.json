@@ -1016,7 +1016,7 @@
       "id": 20,
       "type": "timeseries",
       "title": "Kältekreis: Lufteintritt / Sauggas / Heißgas [°C]",
-      "description": "fg=60 fn=7 dp 262/264/266 (Modbus 31903/31905/31907), geeicht gegen pCO-DB 0106/0107/0108. Lücken = Regler beantwortet die fn=7-Gruppe nicht (Exporter lässt die Gruppe dann weg).",
+      "description": "fg=60 fn=7 dp 262/263/264 (Modbus 31903/31905/31907, 16-bit, 0,1 °C), geeicht gegen pCO-DB 0106/0107/0108. Lücken = Regler beantwortet die fn=7-Gruppe nicht (Exporter lässt die Gruppe dann weg).",
       "datasource": {
         "type": "prometheus",
         "uid": "hoxpi-prom"
@@ -1063,7 +1063,7 @@
       "id": 21,
       "type": "timeseries",
       "title": "Kältekreis: Überhitzung [K] / Niederdruck [bar]",
-      "description": "31913 = Überhitzung (0,01 K, pCO-DB 0202), 31915 = Niederdruck relativ (0,01 bar, pCO-DB 0206). B:02-Niederdruck-Serie: ND < 1,1 bar in den ersten 2–4 min nach Verdichterstart. Lücken = fn=7-Gruppe stumm.",
+      "description": "fg=60 fn=7 dp 514 = Überhitzung (Modbus 31913, 0,01 K, pCO-DB 0202), dp 518 = Niederdruck relativ (Modbus 31915, 0,01 bar, pCO-DB 0206). B:02-Niederdruck-Serie: ND < 1,1 bar in den ersten 2–4 min nach Verdichterstart. Lücken = fn=7-Gruppe stumm.",
       "datasource": {
         "type": "prometheus",
         "uid": "hoxpi-prom"
