@@ -1011,6 +1011,107 @@
           "refId": "D"
         }
       ]
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "Kältekreis: Lufteintritt / Sauggas / Heißgas [°C]",
+      "description": "fg=60 fn=7 dp 262/264/266 (Modbus 31903/31905/31907), geeicht gegen pCO-DB 0106/0107/0108. Lücken = Regler beantwortet die fn=7-Gruppe nicht (Exporter lässt die Gruppe dann weg).",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "hoxpi-prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 71
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "celsius",
+          "custom": {
+            "lineWidth": 2
+          }
+        },
+        "overrides": []
+      },
+      "targets": [
+        {
+          "expr": "hoval_kk_lufteintritt_c",
+          "legendFormat": "Lufteintritt",
+          "refId": "A"
+        },
+        {
+          "expr": "hoval_kk_sauggas_c",
+          "legendFormat": "Sauggas",
+          "refId": "B"
+        },
+        {
+          "expr": "hoval_kk_heissgas_c",
+          "legendFormat": "Heißgas / Verdichter",
+          "refId": "C"
+        },
+        {
+          "expr": "hoval_aussentemp_c",
+          "legendFormat": "Außen (1477)",
+          "refId": "D"
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "Kältekreis: Überhitzung [K] / Niederdruck [bar]",
+      "description": "31913 = Überhitzung (0,01 K, pCO-DB 0202), 31915 = Niederdruck relativ (0,01 bar, pCO-DB 0206). B:02-Niederdruck-Serie: ND < 1,1 bar in den ersten 2–4 min nach Verdichterstart. Lücken = fn=7-Gruppe stumm.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "hoxpi-prom"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 71
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix: K",
+          "custom": {
+            "lineWidth": 2
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Niederdruck"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "pressurebar"
+              }
+            ]
+          }
+        ]
+      },
+      "targets": [
+        {
+          "expr": "hoval_kk_ueberhitzung_k",
+          "legendFormat": "Überhitzung",
+          "refId": "A"
+        },
+        {
+          "expr": "hoval_kk_niederdruck_bar",
+          "legendFormat": "Niederdruck",
+          "refId": "B"
+        }
+      ]
     }
   ]
 }
