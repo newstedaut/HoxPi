@@ -187,7 +187,7 @@ run install -m 755 exporter/hoval_exporter.py /opt/hoxpi/
 [ -e "$HOME_ADM/hoval-bridge" ] || run ln -s /opt/hoxpi "$HOME_ADM/hoval-bridge"
 
 STEP="3b) Zusatzfunktionen"
-echo "--- 3b) Zusatzfunktionen: Feature-Schalter, Keepalive, Waechter, Backup ---"
+echo "--- 3b) Zusatzfunktionen: Feature-Schalter, Keepalive, Waechter, Sollzustand, Backup ---"
 # Zentrale Feature-Schalter (auch im Dashboard: Sicherheit -> Funktionen)
 if [ -f "$HOME_ADM/hoxpi-features.json" ]; then echo "  hoxpi-features.json vorhanden - bleibt unveraendert"
 else run install -m 644 -o "$ADM" hoxpi-features.example.json "$HOME_ADM/hoxpi-features.json"; fi
@@ -196,22 +196,27 @@ run install -m 755 -o "$ADM" keepalive/hoval_keepalive.py "$HOME_ADM/hoval_keepa
 # Stoerungs-Waechter + Verdichter-Kurzzyklus-Alarm (meldet an Home Assistant / Logdatei / Webhook)
 run install -m 755 -o "$ADM" watch/hoval_watch.py "$HOME_ADM/hoval_watch.py"
 run install -d -o "$ADM" "$HOME_ADM/hoval-watch"
+# Sollzustands-Waechter: stellt nach Stromausfall/Wartung die Grund-Betriebsart selbst wieder her (Pause: touch $HOME_ADM/WARTUNG)
+run install -m 755 -o "$ADM" watch/hoval_sollzustand.py "$HOME_ADM/hoval_sollzustand.py"
+if [ -f "$HOME_ADM/hoxpi-sollzustand.json" ]; then echo "  hoxpi-sollzustand.json vorhanden - bleibt unveraendert"
+else run install -m 644 -o "$ADM" watch/hoxpi-sollzustand.example.json "$HOME_ADM/hoxpi-sollzustand.json"; fi
 # Naechtliches versioniertes Backup aller Skripte + Configs
 run install -m 755 -o "$ADM" backup/hoxpi_backup.sh "$HOME_ADM/hoxpi_backup.sh"
 run install -d -o "$ADM" "$HOME_ADM/hoxpi-backups"
 # Cronjobs (User admin) idempotent eintragen:
 CRONLINES="*/5 * * * * /usr/bin/python3 $HOME_ADM/hoval_keepalive.py >> /tmp/keepalive.log 2>&1
 */2 * * * * /usr/bin/python3 $HOME_ADM/hoval_watch.py >/dev/null 2>&1
+*/5 * * * * /usr/bin/python3 $HOME_ADM/hoval_sollzustand.py >/dev/null 2>&1
 17 3 * * * /bin/bash $HOME_ADM/hoxpi_backup.sh >> $HOME_ADM/hoxpi-backups/backup.log 2>&1"
 if [ "$DRY" = "1" ]; then
-  echo "  [dry-run] crontab -u $ADM: folgende Zeilen eintragen (alte hoval_keepalive/hoval_watch/hoxpi_backup-Zeilen ersetzen):"
+  echo "  [dry-run] crontab -u $ADM: folgende Zeilen eintragen (alte hoval_keepalive/hoval_watch/hoval_sollzustand/hoxpi_backup-Zeilen ersetzen):"
   echo "$CRONLINES" | sed 's/^/             /'
 else
   TMPCRON=$(mktemp)
-  crontab -u "$ADM" -l 2>/dev/null | grep -vE "hoval_keepalive|hoval_watch|hoxpi_backup" > "$TMPCRON" || true
+  crontab -u "$ADM" -l 2>/dev/null | grep -vE "hoval_keepalive|hoval_watch|hoval_sollzustand|hoxpi_backup" > "$TMPCRON" || true
   echo "$CRONLINES" >> "$TMPCRON"
   crontab -u "$ADM" "$TMPCRON"; rm -f "$TMPCRON"
-  echo "Cronjobs fuer $ADM eingetragen (Keepalive */5, Waechter */2, Backup 03:17)."
+  echo "Cronjobs fuer $ADM eingetragen (Keepalive */5, Waechter */2, Sollzustand */5, Backup 03:17)."
 fi
 
 # ---------------------------------------------------------------------------
