@@ -196,6 +196,29 @@ def num_meta(reg):
     step = 0.5 if d else 1
     return lo, hi, step, unit
 
+# ---------- Backlog 15c: Wartezustand "Kuehlen angefordert, Kaeltekreisregler wartet auf Kreis-Temperatur" ----------
+# Kriterium wie Dashboard #15b: 1501 = 22 (Kuehlen extern) + 19870 = 1 (UKA offen) + 1539 = 0 (WEZ aus); Vorlauf 1525 (nicht 1535).
+KUEHL_START_MIN_VL = 19.5
+KUEHL_PHASE_TXT = {0: "keine Anforderung", 1: "wartet auf Kreis-Temperatur", 2: "Startmarke erreicht, Freigabe folgt", 3: "Kuehlen aktiv"}
+def kuehl_phase():
+    """-> (phase, vorlauf_c) oder (None, None), wenn Register fehlen."""
+    hk, uka, wez, vl = mb_read(1501), mb_read(19870), mb_read(1539), mb_read(1525)
+    if not (hk and uka and wez): return None, None
+    v = None
+    if vl and vl[0] not in (0x8000, 0xFFFF): v = (vl[0] - 65536 if vl[0] > 32767 else vl[0]) / 10.0
+    if hk[0] != 22: return 0, v
+    if wez[0] != 0: return 3, v
+    if uka[0] != 1: return 0, v
+    if v is None: return None, None
+    return (2 if v >= KUEHL_START_MIN_VL else 1), v
+def publish_kuehl(c):
+    ph, v = kuehl_phase()
+    if ph is None:
+        c.publish(f"{BASE}/kuehl_wartet/state", "unknown", retain=True); return
+    c.publish(f"{BASE}/kuehl_wartet/state", "ON" if ph in (1, 2) else "OFF", retain=True)
+    c.publish(f"{BASE}/kuehl_wartet/attr", json.dumps({"phase": ph, "phase_txt": KUEHL_PHASE_TXT[ph],
+              "vorlauf_c": v, "startmarke_c": KUEHL_START_MIN_VL}), retain=True)
+
 def discovery(c, wl):
     for key, reg, name, unit, dc, enum in SENSORS + [("cop", COP_HI, "COP aktuell", None, None, None)]:
         cfg = {"name": name, "unique_id": f"hoxpi_{key}", "state_topic": f"{BASE}/{key}/state",
@@ -209,6 +232,10 @@ def discovery(c, wl):
         "name": "HoxPi Daten veraltet", "unique_id": "hoxpi_stale", "device_class": "problem",
         "state_topic": f"{BASE}/stale/state", "json_attributes_topic": f"{BASE}/stale/attr",
         "device": DEVICE}), retain=True)
+    c.publish("homeassistant/binary_sensor/hoxpi/kuehl_wartet/config", json.dumps({
+        "name": "Kuehlen wartet auf Kreis-Temperatur", "unique_id": "hoxpi_kuehl_wartet",
+        "state_topic": f"{BASE}/kuehl_wartet/state", "json_attributes_topic": f"{BASE}/kuehl_wartet/attr",
+        "availability_topic": AVAIL, "device": DEVICE}), retain=True)
     for key, reg, name, art, enum in CONTROLS:
         topic = f"homeassistant/{art}/hoxpi/{key}/config"
         if reg not in wl:
@@ -275,6 +302,7 @@ def main():
             for _k,_r,_n,_a,_e in CONTROLS:
                 c.publish(f"homeassistant/{_a}/hoxpi/{_k}/config", "", retain=True)
             c.publish("homeassistant/binary_sensor/hoxpi/stale/config", "", retain=True)
+            c.publish("homeassistant/binary_sensor/hoxpi/kuehl_wartet/config", "", retain=True)
             main._was_off = True
             time.sleep(INTERVAL); continue
         else:
@@ -342,6 +370,8 @@ def main():
                     c.publish(f"{BASE}/{key}/state", scaled(reg, w[0]), retain=True)
             except Exception:
                 pass
+        try: publish_kuehl(c)  # Backlog 15c
+        except Exception as e: print("publish_kuehl:", e, flush=True)
         try:
             stale_check(c, int(_f.get("mqtt_ha", {}).get("stale_min", STALE_MIN_DEFAULT)))
         except Exception as e:

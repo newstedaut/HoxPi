@@ -93,6 +93,8 @@ HELP = {
  "hoval_kk_heissgas_c": "Kaeltekreis Heissgas/Verdichterfuehler 60-7-264 (pCO 0108)",
  "hoval_kk_ueberhitzung_k": "Kaeltekreis Ueberhitzung Sauggas 60-7-514 (pCO 0202), 0,01 K",
  "hoval_kk_niederdruck_bar": "Kaeltekreis Niederdruck relativ 60-7-518 (pCO 0206), 0,01 bar",
+ "hoval_kuehl_phase": "Kuehlen: 0 keine Anforderung, 1 angefordert + Kaeltekreisregler wartet (WP-Vorlauf 1525 < 19,5 C), 2 Startmarke erreicht (Freigabe folgt), 3 Kuehlen aktiv (WEZ-Status != 0)",
+ "hoval_kuehl_wartet": "1 = Kuehlen angefordert, Verdichter steht noch (Phase 1 oder 2); kein Fehler, der Regler startet erst ab WP-Vorlauf 19,5 C",
  "hoval_ww_status": "0=Aus 1=Laden 8=Laden reduziert 12=SmartGrid",
  "hoval_sg_status": "0=Normal 1=Vorzug 2=Gesperrt 3=Abnahmezwang",
 }
@@ -157,6 +159,27 @@ def metrics():
             out.append(f"# HELP hoval_fehlercode_info {HELP['hoval_fehlercode_info']}")
             out.append("# TYPE hoval_fehlercode_info gauge")
             out.append('hoval_fehlercode_info{code="%s:%02d"} 1' % ("IWBE"[(c >> 6) & 3], c & 63))
+    # Backlog 15c: Kuehl-Phase (Wartezustand des Kaeltekreisreglers, Kriterium wie Dashboard #15b)
+    #   0 keine Kuehlanforderung | 1 angefordert, wartet (WP-VL 1525 < 19,5) | 2 Startmarke erreicht | 3 Kuehlen aktiv
+    try:
+        _hk, _uka, _wez, _vl = rd(1501), rd(19870), rd(1539), rd(1525)
+        _ph = None
+        if _hk and _uka and _wez:
+            if _hk[0] != 22: _ph = 0
+            elif _wez[0] != 0: _ph = 3
+            elif _uka[0] != 1: _ph = 0
+            elif _vl and _vl[0] not in (0x8000, 0xFFFF):
+                _v = (_vl[0] - 65536 if _vl[0] > 32767 else _vl[0]) / 10.0
+                _ph = 2 if _v >= 19.5 else 1
+        if _ph is not None:
+            out.append(f"# HELP hoval_kuehl_phase {HELP['hoval_kuehl_phase']}")
+            out.append("# TYPE hoval_kuehl_phase gauge")
+            out.append(f"hoval_kuehl_phase {_ph}")
+            out.append(f"# HELP hoval_kuehl_wartet {HELP['hoval_kuehl_wartet']}")
+            out.append("# TYPE hoval_kuehl_wartet gauge")
+            out.append(f"hoval_kuehl_wartet {1 if _ph in (1, 2) else 0}")
+    except Exception:
+        pass
     # Kaeltekreis-Gruppe (R7): nur ausgeben, wenn mindestens ein Punkt antwortet (alle 0 = Regler stumm)
     _kk = {}
     for name, (reg, sc, sg) in KK16.items():
