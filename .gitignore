@@ -7,6 +7,8 @@ reg_texts.json
 
 # Anlagen-spezifische Konfiguration
 whitelist.json
+cache_last.json
+cache_last.json.tmp
 tools/discovery_names.json
 
 # Python
