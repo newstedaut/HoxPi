@@ -131,6 +131,10 @@ def _cop_gated():
     """COP 31667/68 (dec1); COP-Startfilter: in den ersten ~25 s eines Laufs liefert der FA Unsinn,
     weil Pel noch ~0 ist -> 0 zurueckgeben, solange 25611 < 0,5 kW."""
     cop = _r32(31667, 1)
+    if not cop:  # 31667 (60-3-1054) antwortet nach Netz-Ein nicht mehr (F1, 04.09.) -> FA-COP dp 45 (27490, U8, 0,1)
+        fa = _rd(27490)
+        if fa and fa[0] not in (0x8000, 0xFFFF) and fa[0] <= 200:
+            cop = round(fa[0] / 10.0, 1)
     pel = _rd(25611)
     if not pel or pel[0] in (0x8000, 0xFFFF) or pel[0] < 50:
         return 0.0

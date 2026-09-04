@@ -207,7 +207,8 @@ def kuehl_phase():
     v = None
     if vl and vl[0] not in (0x8000, 0xFFFF): v = (vl[0] - 65536 if vl[0] > 32767 else vl[0]) / 10.0
     if hk[0] != 22: return 0, v
-    if wez[0] != 0: return 3, v
+    _pel = mb_read(25611)  # F1 04.09.: 1539 stumm nach Netz-Ein -> Verdichter laeuft auch bei Pel >= 0,5 kW
+    if wez[0] != 0 or (_pel and _pel[0] not in (0x8000, 0xFFFF) and _pel[0] >= 50): return 3, v
     if uka[0] != 1: return 0, v
     if v is None: return None, None
     return (2 if v >= KUEHL_START_MIN_VL else 1), v
@@ -348,6 +349,9 @@ def main():
                 pass
         try:
             hl = mb_read(COP_HI, 2)
+            if not (hl and hl[0] not in (0x8000, 0xFFFF) and hl[1] not in (0x8000, 0xFFFF)) or ((hl[0] << 16) | hl[1]) == 0:
+                _fa = mb_read(27490, 1)  # F1 04.09.: 31667 stumm nach Netz-Ein -> FA-COP dp 45 (U8, 0,1)
+                hl = [0, _fa[0]] if (_fa and _fa[0] not in (0x8000, 0xFFFF) and _fa[0] <= 200) else None
             if hl:
                 _cop = ((hl[0] << 16) | hl[1]) / 10
                 try: _copf = json.load(open("/home/admin/hoxpi-features.json")).get("cop_filter",{}).get("enabled",True)

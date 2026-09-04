@@ -61,6 +61,8 @@ def kuehl_wartet(vals):
     (Anforderung steht, Verdichter aus); erreicht = Vorlauf 1525 >= KUEHL_START_MIN_VL (Startfreigabe folgt); sonst None."""
     try:
         if vals.get(1539) != 0 or vals.get(1501) != 22 or vals.get(19870) != 1: return None
+        _pel = vals.get(25611)  # F1 04.09.: 1539 antwortet nach Netz-Ein nicht (0) -> Verdichter laeuft, wenn Pel >= 0,5 kW
+        if _pel is not None and _pel not in (0xFFFF, 0x8000) and _pel >= 50: return None
         vl = vals.get(1525)
         if vl is None or vl in (0xFFFF, 0x8000): return None
         vl = (vl - 65536 if vl > 32767 else vl) / 10.0
