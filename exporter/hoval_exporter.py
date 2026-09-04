@@ -75,6 +75,8 @@ KK16 = {
  "hoval_kk_heissgas_c": (31907, 0.1, True),        # dp264 Heissgas/Verdichterfuehler
  "hoval_kk_ueberhitzung_k": (31913, 0.01, True),   # dp514 Ueberhitzung 0,01 K
  "hoval_kk_niederdruck_bar": (31915, 0.01, True),  # dp518 Niederdruck relativ 0,01 bar
+ "hoval_kk_hochdruck_bar": (31917, 0.01, True),    # dp519 Hochdruck relativ 0,01 bar (pCO 0207, R7b)
+ "hoval_kk_drehzahl_pct": (31921, 0.1, False),     # dp1282 Verdichter-Istdrehzahl 0,1 % (R7b, wahrscheinlich)
 }
 COUNTER32 = ("mwh", "zyklen", "betriebsstunden")
 HELP = {
@@ -93,6 +95,8 @@ HELP = {
  "hoval_kk_heissgas_c": "Kaeltekreis Heissgas/Verdichterfuehler 60-7-264 (pCO 0108)",
  "hoval_kk_ueberhitzung_k": "Kaeltekreis Ueberhitzung Sauggas 60-7-514 (pCO 0202), 0,01 K",
  "hoval_kk_niederdruck_bar": "Kaeltekreis Niederdruck relativ 60-7-518 (pCO 0206), 0,01 bar",
+ "hoval_kk_hochdruck_bar": "Kaeltekreis Hochdruck relativ 60-7-519 (pCO 0207), 0,01 bar",
+ "hoval_kk_drehzahl_pct": "Verdichter-Istdrehzahl 60-7-1282 in % (= Modulation der Ausseneinheit, 0 im Stillstand)",
  "hoval_kuehl_phase": "Kuehlen: 0 keine Anforderung, 1 angefordert + Kaeltekreisregler wartet (WP-Vorlauf 1525 < 19,5 C), 2 Startmarke erreicht (Freigabe folgt), 3 Kuehlen aktiv (WEZ-Status != 0)",
  "hoval_kuehl_wartet": "1 = Kuehlen angefordert, Verdichter steht noch (Phase 1 oder 2); kein Fehler, der Regler startet erst ab WP-Vorlauf 19,5 C",
  "hoval_ww_status": "0=Aus 1=Laden 8=Laden reduziert 12=SmartGrid",

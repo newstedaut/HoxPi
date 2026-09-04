@@ -110,7 +110,8 @@ def rl_fallback(vals):
 # ---------- Kältekreis fg=60/fn=7 (Backlog R7, 04.09.2026) ----------
 # 31903 Lufteintritt / 31905 Sauggas / 31907 Heißgas (0,1 °C), 31913 Überhitzung (0,01 K), 31915 Niederdruck rel. (0,01 bar);
 # gegen die pCO-DB (RS485) geeicht. Zustandsabhängig: antwortet der Regler nicht, liefert die Bridge für alle fünf 0.
-KK_REGS = (31903, 31905, 31907, 31913, 31915)
+# R7b (04.09. 16:xx): + 31917 Hochdruck rel. (0,01 bar, pCO 0207, sicher) + 31921 Verdichter-Istdrehzahl (0,1 %, wahrscheinlich)
+KK_REGS = (31903, 31905, 31907, 31913, 31915, 31917, 31921)
 def kk_stumm(vals):
     """True, wenn die fn=7-Kältekreispunkte nicht antworten (alle fünf 0/0x8000/0xFFFF/None)."""
     try:
@@ -195,6 +196,8 @@ DOMAINS = [
      (31907,"Heißgas / Verdichter-Temperatur","°C",1,True),
      (31913,"Überhitzung","K",2,True),
      (31915,"Niederdruck (relativ)","bar",2,True),
+     (31917,"Hochdruck (relativ)","bar",2,True),
+     (31921,"Verdichter-Istdrehzahl","%",1,False),
    ]),
  ]),
  ("Heizung & Kühlung", "🌡️", [
@@ -258,6 +261,8 @@ DESC = {
  31907:"Kältekreis: Heißgas-/Verdichter-Temperatur nach dem Verdichter. Datenpunkt 60-7-264 (pCO 0108).",
  31913:"Kältekreis: Überhitzung des Sauggases in Kelvin (Sauggas − Verdampfungstemperatur aus dem Niederdruck). Datenpunkt 60-7-514 (pCO 0202), Auflösung 0,01 K.",
  31915:"Kältekreis: Niederdruck (relativ) auf der Saugseite in bar. Datenpunkt 60-7-518 (pCO 0206), Auflösung 0,01 bar. Sehr niedrig beim Kaltstart → Störung B:02.",
+ 31917:"Kältekreis: Hochdruck (relativ) auf der Druckseite in bar. Datenpunkt 60-7-519 (pCO 0207), Auflösung 0,01 bar. Im Stillstand ≈ Niederdruck + 0,1 bar; Warmwasserladung 32–35 bar, Kühlen ≈ 22 bar.",
+ 31921:"Kältekreis: Ist-Drehzahl des Verdichters in % (Datenpunkt 60-7-1282). Entspricht der Modulation der Außeneinheit; 0 im Stillstand. Zuordnung wahrscheinlich (gegen RS485 dp 30 geeicht).",
  1477:"Aktuelle Außentemperatur (Fühler der Wärmepumpe). Basis für die witterungsgeführte Heizkurve.",
  1539:"WEZ-Status des Wärmeerzeugers (Heizen, Kühlen, Warmwasser, Wiedereinschaltsperre, Startvorbereitung, Verriegelung).",
  1534:"Hoval-Fehlercode (255 = keine Störung). Klartext W/B/E:Nr = Warnung/Blockierung/Verriegelung; Bedeutungen aus eigener Auswertung des Fehlerspeichers, nicht aus einer Hoval-Liste.",
@@ -310,6 +315,8 @@ DESC_EN = {
  31907:"Refrigerant circuit: hot-gas / compressor temperature after the compressor. Data point 60-7-264 (pCO 0108).",
  31913:"Refrigerant circuit: suction-gas superheat in kelvin (suction gas − evaporating temperature from the low pressure). Data point 60-7-514 (pCO 0202), resolution 0.01 K.",
  31915:"Refrigerant circuit: low pressure (relative) on the suction side in bar. Data point 60-7-518 (pCO 0206), resolution 0.01 bar. Very low at cold start → fault B:02.",
+ 31917:"Refrigerant circuit: high pressure (relative) on the discharge side in bar. Data point 60-7-519 (pCO 0207), resolution 0.01 bar. Standstill ≈ low pressure + 0.1 bar; DHW charging 32–35 bar, cooling ≈ 22 bar.",
+ 31921:"Refrigerant circuit: actual compressor speed in % (data point 60-7-1282). Equals the outdoor unit modulation; 0 at standstill. Assignment probable (calibrated against RS485 dp 30).",
  1477:"Current outdoor temperature (heat-pump sensor). Basis for the weather-compensated heating curve.",
  1539:"Heat-generator status (heating, cooling, hot water, restart lock-out, start preparation, lock-out).",
  1534:"Hoval fault code (255 = no fault). Plain text W/B/E:no = warning/blocking/lock-out; meanings from our own analysis of the fault memory, not from a Hoval list.",
@@ -380,6 +387,7 @@ TR_LABEL = {
  "Wasserdruck":"Water pressure","Rücklauf Wärmeerzeuger":"Return (heat generator)","WEZ-Temperatur":"Heat generator temp.",
  "Kältekreis":"Refrigerant circuit","Lufteintritt Verdampfer":"Evaporator air inlet","Sauggas-Temperatur":"Suction-gas temperature",
  "Heißgas / Verdichter-Temperatur":"Hot-gas / compressor temperature","Überhitzung":"Superheat","Niederdruck (relativ)":"Low pressure (relative)",
+ "Hochdruck (relativ)":"High pressure (relative)","Verdichter-Istdrehzahl":"Compressor actual speed",
  "Leistungs-Sollwert":"Output setpoint","Anforderung an Wärmeerzeuger":"Demand on heat generator",
  "Betriebsart":"Operating mode","Status Heizkreis":"Heating circuit status","Raumtemperatur Ist":"Room temperature (actual)",
  "Raum-Sollwert":"Room setpoint","Vorlauf-Temperatur":"Flow temperature","Rücklauf-Temperatur":"Return temperature",
