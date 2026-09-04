@@ -129,6 +129,9 @@ def metrics():
     import json as _j
     try: _copf = _j.load(open("/home/admin/hoxpi-features.json")).get("cop_filter",{}).get("enabled",True)
     except Exception: _copf = True
+    # COP-Startfilter: dp 45 liefert in den ersten ~25 s eines Laufs Unsinn (Pel ~0) -> COP = 0, solange Pel < 0,5 kW
+    _pel = rd(25611)
+    _cop_ok = (not _copf) or (bool(_pel) and _pel[0] not in (0x8000, 0xFFFF) and _pel[0] >= 50)
     for name, (reg, sc, sg) in R16.items():
         w = rd(reg)
         if not w: continue
@@ -144,6 +147,7 @@ def metrics():
         if sg and v > 32767: v -= 65536
         if v in INVALID16.get(name, ()): continue
         if _copf and name in ("hoval_fa_cop",) and not (0 <= v*sc <= 20): continue  # COP-Plausibilitaet
+        if name == "hoval_fa_cop" and not _cop_ok: v = 0  # COP-Startfilter
         if name in HELP: out.append(f"# HELP {name} {HELP[name]}")
         out.append(f"# TYPE {name} gauge")
         out.append(f"{name} {round(v*sc, 3)}")
@@ -177,6 +181,7 @@ def metrics():
         if v == 0x80000000: continue
         if sg and v > 0x7FFFFFFF: v -= 0x100000000
         if _copf and name == "hoval_cop" and not (0 <= v*sc <= 20): continue  # COP-Plausibilitaet
+        if name == "hoval_cop" and not _cop_ok: v = 0  # COP-Startfilter
         typ = "counter" if any(k in name for k in COUNTER32) else "gauge"
         if name in HELP: out.append(f"# HELP {name} {HELP[name]}")
         out.append(f"# TYPE {name} {typ}")
