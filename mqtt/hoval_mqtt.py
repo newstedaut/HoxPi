@@ -280,6 +280,14 @@ def main():
             try:
                 w = mb_read(reg)
                 if w is None: continue
+                if reg == 1535 and w[0] == 0:  # FA-Ruecklauf nach Netz-Ein stumm (0 = kein Wert) -> WP-Ruecklauf 60-7-258 (S32 31894/31895)
+                    hl = mb_read(31894, 2)
+                    if not hl or len(hl) < 2: continue
+                    _r = (hl[0] << 16) | hl[1]
+                    if _r in (0xFFFFFFFF, 0x80000000): continue
+                    if _r > 0x7FFFFFFF: _r -= 0x100000000
+                    if not -500 <= _r <= 1500: continue
+                    w = [_r & 0xFFFF]
                 _stale["last_ok"] = time.time()
                 v = scaled(reg, w[0])
                 if enum is not None:

@@ -86,6 +86,25 @@ def kuehl_wartet_status(kw):
         return L(" – Startfreigabe folgt", " – start release pending")
     return L(" – wartet auf Kreis-Temperatur", " – waiting for circuit temperature")
 
+# ---------- Rücklauf-Fallback (Backlog R6, 04.09.2026) ----------
+# 1535 (60-254-29 = Rücklauf des Kältekreisreglers) antwortet nach Netz-Ein der WP per CAN nicht (Freigabe dp 21 = 0),
+# die Bridge liefert 0. Ersatz: WP-Rücklauf 60-7-258 (S32, High 31894 / Low 31895) — im WW-Eichlauf 03.09. 1:1 mit 1535.
+RL_FALLBACK_HI, RL_FALLBACK_LO = 31894, 31895
+def rl_fallback(vals):
+    """Ersetzt vals[1535] = 0/None durch den 16-bit-Rohwert des WP-Rücklaufs; -> True, wenn ersetzt."""
+    try:
+        if vals.get(1535) not in (None, 0): return False
+        hi, lo = vals.get(RL_FALLBACK_HI), vals.get(RL_FALLBACK_LO)
+        if hi is None or lo is None: return False
+        v = (hi << 16) | lo
+        if v in (0xFFFFFFFF, 0x80000000): return False
+        if v > 0x7FFFFFFF: v -= 0x100000000
+        if not -500 <= v <= 1500: return False   # -50,0 … 150,0 °C
+        vals[1535] = v & 0xFFFF
+        return True
+    except Exception:
+        return False
+
 def st_txt(table_de, table_en, raw):
     """Statustext in der aktuellen Sprache; unbekannter Code -> 'Code n'."""
     t = table_en if curlang() == "en" else table_de
@@ -1706,10 +1725,11 @@ function apost(url, body, msgid){
 
     def werte(self):
         regs = [it[0] for _,_,subs in DOMAINS for _,items in subs for it in items if it[0] is not None]
-        vals, ok = read_modbus(regs + [19870])
+        vals, ok = read_modbus(regs + [19870, RL_FALLBACK_HI, RL_FALLBACK_LO])
         if not ok:
             return f'<h1>{L("Werte","Values")}</h1><div class="note warn">⚠️ {L("Brücke (Modbus :502) nicht erreichbar.","Bridge (Modbus :502) not reachable.")}</div>'
         out = [f'<h1>{L("Live-Werte","Live values")}</h1>']
+        _rl_fb = rl_fallback(vals)  # 1535 stumm (nach Netz-Ein) -> WP-Rücklauf 31894/31895
         _kw = kuehl_wartet(vals)
         if _kw is not None:
             out.append(f'<div class="note warn">⏳ {html.escape(kuehl_wartet_txt(_kw))}</div>')
@@ -1735,6 +1755,8 @@ function apost(url, body, msgid){
                             txt += kuehl_wartet_status(_kw)
                     d = html.escape(desc(reg, tl(name), unit))
                     _z = get_labels().get(str(reg))
+                    if reg == 1535 and _rl_fb:
+                        _z = (_z + " · " if _z else "") + L("WP-Rücklauf (Ersatz)", "HP return (fallback)")
                     _nm = html.escape(tl(name)) + (f'<span class="ze">{html.escape(_z)}</span>' if _z else "")
                     out.append(f'<div class="card" title="{d}"><div class="n">{_nm}</div>'
                                f'<div class="v {cls}">{html.escape(txt)}</div><span class="tt">{d}</span></div>')
