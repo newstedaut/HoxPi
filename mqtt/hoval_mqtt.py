@@ -67,7 +67,15 @@ SENSORS = [
     ("anforderung",       18768, "Anforderung WEZ",       None, None, {0: "nein", 100: "ja"}),
     ("status_wez",         1539, "Status WEZ",            None, None, WEZ_STATUS),
     ("fehlercode",         1534, "Fehlercode WEZ",        None, None, FEHLER_ENUM),
+    # --- Kaeltekreis fg=60/fn=7 (Backlog R7, 04.09.2026): 16-bit, Skala/Vorzeichen in KK_SENS (registers.json fuehrt sie falsch als S32/1) ---
+    ("kk_lufteintritt",   31903, "Kaeltekreis Lufteintritt",  "°C",  "temperature", None),
+    ("kk_sauggas",        31905, "Kaeltekreis Sauggas",       "°C",  "temperature", None),
+    ("kk_heissgas",       31907, "Kaeltekreis Heissgas",      "°C",  "temperature", None),
+    ("kk_ueberhitzung",   31913, "Kaeltekreis Ueberhitzung",  "K",   None,          None),
+    ("kk_niederdruck",    31915, "Kaeltekreis Niederdruck",   "bar", "pressure",    None),
 ]
+# Kaeltekreis: 0,1 °C bzw. 0,01 K / 0,01 bar, signed 16-bit. Antwortet der Regler nicht, liefert die Bridge fuer alle fuenf 0 -> "unknown".
+KK_SENS = {31903: 0.1, 31905: 0.1, 31907: 0.1, 31913: 0.01, 31915: 0.01}
 # 18767: Leistungs-Sollwert des Waermeerzeugers, S16 /10, -100..+100 %.
 #   -100.0 = kein Bedarf (unterer Anschlag des Reglerausgangs, gueltiger Wert)
 #   -127.0 = UNGUELTIG -> wird unten als "unknown" publiziert, nie als Zahl.
@@ -276,10 +284,20 @@ def main():
         wl = whitelist()
         if wl != last_wl:
             discovery(c, wl); last_wl = wl
+        try:  # Kaeltekreis-Gruppe stumm? (alle fuenf 0/Sentinel -> Regler beantwortet fn=7 gerade nicht)
+            _kk_st = all((lambda _w: _w is None or _w[0] in (0, 0x8000, 0xFFFF))(mb_read(_r)) for _r in KK_SENS)
+        except Exception:
+            _kk_st = True
         for key, reg, name, unit, dc, enum in SENSORS:
             try:
                 w = mb_read(reg)
                 if w is None: continue
+                if reg in KK_SENS:
+                    if _kk_st or w[0] in (0x8000, 0xFFFF):
+                        c.publish(f"{BASE}/{key}/state", "unknown", retain=True); continue
+                    _stale["last_ok"] = time.time()
+                    _kv = w[0] - 65536 if w[0] > 32767 else w[0]
+                    c.publish(f"{BASE}/{key}/state", round(_kv * KK_SENS[reg], 2), retain=True); continue
                 if reg == 1535 and w[0] == 0:  # FA-Ruecklauf nach Netz-Ein stumm (0 = kein Wert) -> WP-Ruecklauf 60-7-258 (S32 31894/31895)
                     hl = mb_read(31894, 2)
                     if not hl or len(hl) < 2: continue

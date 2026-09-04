@@ -105,6 +105,17 @@ def rl_fallback(vals):
     except Exception:
         return False
 
+# ---------- Kältekreis fg=60/fn=7 (Backlog R7, 04.09.2026) ----------
+# 31903 Lufteintritt / 31905 Sauggas / 31907 Heißgas (0,1 °C), 31913 Überhitzung (0,01 K), 31915 Niederdruck rel. (0,01 bar);
+# gegen die pCO-DB (RS485) geeicht. Zustandsabhängig: antwortet der Regler nicht, liefert die Bridge für alle fünf 0.
+KK_REGS = (31903, 31905, 31907, 31913, 31915)
+def kk_stumm(vals):
+    """True, wenn die fn=7-Kältekreispunkte nicht antworten (alle fünf 0/0x8000/0xFFFF/None)."""
+    try:
+        return all(vals.get(r) in (None, 0, 0x8000, 0xFFFF) for r in KK_REGS)
+    except Exception:
+        return True
+
 def st_txt(table_de, table_en, raw):
     """Statustext in der aktuellen Sprache; unbekannter Code -> 'Code n'."""
     t = table_en if curlang() == "en" else table_de
@@ -176,6 +187,13 @@ DOMAINS = [
      (18767,"Leistungs-Sollwert","PWRSET",1,True),
      (18768,"Anforderung an Wärmeerzeuger","REQ",0,False),
    ]),
+   ("Kältekreis", [
+     (31903,"Lufteintritt Verdampfer","°C",1,True),
+     (31905,"Sauggas-Temperatur","°C",1,True),
+     (31907,"Heißgas / Verdichter-Temperatur","°C",1,True),
+     (31913,"Überhitzung","K",2,True),
+     (31915,"Niederdruck (relativ)","bar",2,True),
+   ]),
  ]),
  ("Heizung & Kühlung", "🌡️", [
    (None, [
@@ -233,6 +251,11 @@ DOMAINS = [
 # Kurzbeschreibungen je Datenpunkt (Register -> Text). Für nicht gelistete Register
 # wird automatisch ein Text aus den Metadaten erzeugt -> jeder Wert hat einen Tooltip.
 DESC = {
+ 31903:"Kältekreis: Lufttemperatur am Eintritt des Verdampfers (Außeneinheit). Datenpunkt 60-7-262, gegen den Verdichterregler (pCO 0106) geeicht.",
+ 31905:"Kältekreis: Sauggas-Temperatur vor dem Verdichter. Datenpunkt 60-7-263 (pCO 0107). Sauggas − Überhitzung = Verdampfungstemperatur.",
+ 31907:"Kältekreis: Heißgas-/Verdichter-Temperatur nach dem Verdichter. Datenpunkt 60-7-264 (pCO 0108).",
+ 31913:"Kältekreis: Überhitzung des Sauggases in Kelvin (Sauggas − Verdampfungstemperatur aus dem Niederdruck). Datenpunkt 60-7-514 (pCO 0202), Auflösung 0,01 K.",
+ 31915:"Kältekreis: Niederdruck (relativ) auf der Saugseite in bar. Datenpunkt 60-7-518 (pCO 0206), Auflösung 0,01 bar. Sehr niedrig beim Kaltstart → Störung B:02.",
  1477:"Aktuelle Außentemperatur (Fühler der Wärmepumpe). Basis für die witterungsgeführte Heizkurve.",
  1539:"WEZ-Status des Wärmeerzeugers (Heizen, Kühlen, Warmwasser, Wiedereinschaltsperre, Startvorbereitung, Verriegelung).",
  1534:"Hoval-Fehlercode (255 = keine Störung). Klartext W/B/E:Nr = Warnung/Blockierung/Verriegelung; Bedeutungen aus eigener Auswertung des Fehlerspeichers, nicht aus einer Hoval-Liste.",
@@ -280,6 +303,11 @@ DESC = {
 
 # Übersetzung der Bezeichnungen (Bereiche, Unterüberschriften, Wertnamen) für die Werte-Seite
 DESC_EN = {
+ 31903:"Refrigerant circuit: air temperature at the evaporator inlet (outdoor unit). Data point 60-7-262, calibrated against the compressor controller (pCO 0106).",
+ 31905:"Refrigerant circuit: suction-gas temperature before the compressor. Data point 60-7-263 (pCO 0107). Suction gas − superheat = evaporating temperature.",
+ 31907:"Refrigerant circuit: hot-gas / compressor temperature after the compressor. Data point 60-7-264 (pCO 0108).",
+ 31913:"Refrigerant circuit: suction-gas superheat in kelvin (suction gas − evaporating temperature from the low pressure). Data point 60-7-514 (pCO 0202), resolution 0.01 K.",
+ 31915:"Refrigerant circuit: low pressure (relative) on the suction side in bar. Data point 60-7-518 (pCO 0206), resolution 0.01 bar. Very low at cold start → fault B:02.",
  1477:"Current outdoor temperature (heat-pump sensor). Basis for the weather-compensated heating curve.",
  1539:"Heat-generator status (heating, cooling, hot water, restart lock-out, start preparation, lock-out).",
  1534:"Hoval fault code (255 = no fault). Plain text W/B/E:no = warning/blocking/lock-out; meanings from our own analysis of the fault memory, not from a Hoval list.",
@@ -348,6 +376,8 @@ TR_LABEL = {
  "Außentemperatur":"Outdoor temperature","Betriebsstatus":"Operating status","Fehlercode":"Fault code","Störungsflag":"Fault flag","Modulation Verdichter":"Compressor modulation",
  "Elektrische Leistung":"Electrical power","Heizleistung":"Heating power","Effizienz (Arbeitszahl)":"Efficiency (COP)",
  "Wasserdruck":"Water pressure","Rücklauf Wärmeerzeuger":"Return (heat generator)","WEZ-Temperatur":"Heat generator temp.",
+ "Kältekreis":"Refrigerant circuit","Lufteintritt Verdampfer":"Evaporator air inlet","Sauggas-Temperatur":"Suction-gas temperature",
+ "Heißgas / Verdichter-Temperatur":"Hot-gas / compressor temperature","Überhitzung":"Superheat","Niederdruck (relativ)":"Low pressure (relative)",
  "Leistungs-Sollwert":"Output setpoint","Anforderung an Wärmeerzeuger":"Demand on heat generator",
  "Betriebsart":"Operating mode","Status Heizkreis":"Heating circuit status","Raumtemperatur Ist":"Room temperature (actual)",
  "Raum-Sollwert":"Room setpoint","Vorlauf-Temperatur":"Flow temperature","Rücklauf-Temperatur":"Return temperature",
@@ -1730,6 +1760,7 @@ function apost(url, body, msgid){
             return f'<h1>{L("Werte","Values")}</h1><div class="note warn">⚠️ {L("Brücke (Modbus :502) nicht erreichbar.","Bridge (Modbus :502) not reachable.")}</div>'
         out = [f'<h1>{L("Live-Werte","Live values")}</h1>']
         _rl_fb = rl_fallback(vals)  # 1535 stumm (nach Netz-Ein) -> WP-Rücklauf 31894/31895
+        _kk_st = kk_stumm(vals)  # fn=7-Kältekreis antwortet nicht (alle fünf 0) -> Karten „—"
         _kw = kuehl_wartet(vals)
         if _kw is not None:
             out.append(f'<div class="note warn">⏳ {html.escape(kuehl_wartet_txt(_kw))}</div>')
@@ -1751,12 +1782,16 @@ function apost(url, body, msgid){
                         cls = "val" if raw is not None else "muted"
                     else:
                         txt, cls = fmt(raw, unit, dec, signed)
+                        if reg in KK_REGS and _kk_st:
+                            txt, cls = "—", "muted"
                         if reg == 1539 and _kw is not None:
                             txt += kuehl_wartet_status(_kw)
                     d = html.escape(desc(reg, tl(name), unit))
                     _z = get_labels().get(str(reg))
                     if reg == 1535 and _rl_fb:
                         _z = (_z + " · " if _z else "") + L("WP-Rücklauf (Ersatz)", "HP return (fallback)")
+                    if reg in KK_REGS and _kk_st:
+                        _z = (_z + " · " if _z else "") + L("Regler antwortet nicht", "controller not answering")
                     _nm = html.escape(tl(name)) + (f'<span class="ze">{html.escape(_z)}</span>' if _z else "")
                     out.append(f'<div class="card" title="{d}"><div class="n">{_nm}</div>'
                                f'<div class="v {cls}">{html.escape(txt)}</div><span class="tt">{d}</span></div>')

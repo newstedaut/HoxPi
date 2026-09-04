@@ -67,6 +67,15 @@ R32 = {
  "hoval_wp_pumpe_pct": (27495, 1),                 # dp271 Drehzahl WP-Umwaelzpumpe, 0xFFFFFFFF = aus -> 0
  "hoval_volumenstrom_lmin": (31707, 0.1),          # dp302 Volumenstrom gemittelt
 }
+# --- Kaeltekreis fg=60/fn=7 (Backlog R7, 04.09.2026): 16-bit-Einzelwort in der Bridge, gegen pCO-DB 0106/0107/0108/0202/0206 geeicht.
+#     Zustandsabhaengig: antwortet der Regler nicht, liefert die Bridge fuer alle fuenf 0 -> Gruppe weglassen (kein 0-Wert publizieren).
+KK16 = {
+ "hoval_kk_lufteintritt_c": (31903, 0.1, True),    # dp262 Lufteintritt Verdampfer
+ "hoval_kk_sauggas_c": (31905, 0.1, True),         # dp263 Sauggas vor Verdichter
+ "hoval_kk_heissgas_c": (31907, 0.1, True),        # dp264 Heissgas/Verdichterfuehler
+ "hoval_kk_ueberhitzung_k": (31913, 0.01, True),   # dp514 Ueberhitzung 0,01 K
+ "hoval_kk_niederdruck_bar": (31915, 0.01, True),  # dp518 Niederdruck relativ 0,01 bar
+}
 COUNTER32 = ("mwh", "zyklen", "betriebsstunden")
 HELP = {
  "hoval_hc1_status": "0=Aus 1..3=Heizen 9..11=Kuehlen 12=Stoerung 26=SmartGrid",
@@ -79,6 +88,11 @@ HELP = {
  "hoval_wp_pumpe_pct": "Drehzahl WP-Umwaelzpumpe (0=aus)",
  "hoval_ruecklauf_c": "Ruecklauf 1535 (Kaeltekreisregler); liefert 1535 nach Netz-Ein 0, wird der WP-Ruecklauf 60-7-258 (31894/31895) ausgegeben",
  "hoval_fa_ruecklauf_c": "Ruecklauf 1535 roh (60-254-29), fehlt solange die FA nach Netz-Ein nicht antwortet",
+ "hoval_kk_lufteintritt_c": "Kaeltekreis Lufteintritt Verdampfer 60-7-262 (pCO 0106); Gruppe fehlt, wenn der Regler die fn=7-Punkte nicht beantwortet",
+ "hoval_kk_sauggas_c": "Kaeltekreis Sauggas vor Verdichter 60-7-263 (pCO 0107)",
+ "hoval_kk_heissgas_c": "Kaeltekreis Heissgas/Verdichterfuehler 60-7-264 (pCO 0108)",
+ "hoval_kk_ueberhitzung_k": "Kaeltekreis Ueberhitzung Sauggas 60-7-514 (pCO 0202), 0,01 K",
+ "hoval_kk_niederdruck_bar": "Kaeltekreis Niederdruck relativ 60-7-518 (pCO 0206), 0,01 bar",
  "hoval_ww_status": "0=Aus 1=Laden 8=Laden reduziert 12=SmartGrid",
  "hoval_sg_status": "0=Normal 1=Vorzug 2=Gesperrt 3=Abnahmezwang",
 }
@@ -139,6 +153,19 @@ def metrics():
             out.append(f"# HELP hoval_fehlercode_info {HELP['hoval_fehlercode_info']}")
             out.append("# TYPE hoval_fehlercode_info gauge")
             out.append('hoval_fehlercode_info{code="%s:%02d"} 1' % ("IWBE"[(c >> 6) & 3], c & 63))
+    # Kaeltekreis-Gruppe (R7): nur ausgeben, wenn mindestens ein Punkt antwortet (alle 0 = Regler stumm)
+    _kk = {}
+    for name, (reg, sc, sg) in KK16.items():
+        w = rd(reg)
+        _kk[name] = None if (not w or w[0] in (0x8000, 0xFFFF)) else w[0]
+    if any(v not in (None, 0) for v in _kk.values()):
+        for name, (reg, sc, sg) in KK16.items():
+            v = _kk[name]
+            if v is None: continue
+            if sg and v > 32767: v -= 65536
+            if name in HELP: out.append(f"# HELP {name} {HELP[name]}")
+            out.append(f"# TYPE {name} gauge")
+            out.append(f"{name} {round(v*sc, 3)}")
     for name, spec in R32.items():
         reg, sc = spec[0], spec[1]; sg = len(spec) > 2 and spec[2]
         w = rd(reg, 2)
