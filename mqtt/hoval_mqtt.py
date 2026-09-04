@@ -73,9 +73,11 @@ SENSORS = [
     ("kk_heissgas",       31907, "Kaeltekreis Heissgas",      "°C",  "temperature", None),
     ("kk_ueberhitzung",   31913, "Kaeltekreis Ueberhitzung",  "K",   None,          None),
     ("kk_niederdruck",    31915, "Kaeltekreis Niederdruck",   "bar", "pressure",    None),
+    ("kk_hochdruck",      31917, "Kaeltekreis Hochdruck",     "bar", "pressure",    None),
+    ("kk_drehzahl",       31921, "Verdichter Istdrehzahl",    "%",   None,          None),
 ]
 # Kaeltekreis: 0,1 °C bzw. 0,01 K / 0,01 bar, signed 16-bit. Antwortet der Regler nicht, liefert die Bridge fuer alle fuenf 0 -> "unknown".
-KK_SENS = {31903: 0.1, 31905: 0.1, 31907: 0.1, 31913: 0.01, 31915: 0.01}
+KK_SENS = {31903: 0.1, 31905: 0.1, 31907: 0.1, 31913: 0.01, 31915: 0.01, 31917: 0.01, 31921: 0.1}  # R7b: + Hochdruck, Istdrehzahl
 # 18767: Leistungs-Sollwert des Waermeerzeugers, S16 /10, -100..+100 %.
 #   -100.0 = kein Bedarf (unterer Anschlag des Reglerausgangs, gueltiger Wert)
 #   -127.0 = UNGUELTIG -> wird unten als "unknown" publiziert, nie als Zahl.

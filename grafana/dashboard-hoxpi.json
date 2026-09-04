@@ -3,7 +3,7 @@
   "title": "HoxPi Wärmepumpe",
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 3,
+  "version": 4,
   "refresh": "1m",
   "time": {
     "from": "now-24h",
@@ -373,8 +373,14 @@
           "expr": "clamp_min(hoval_leistung_soll_kuehlen_pct, 0)",
           "legendFormat": "Soll Kühlen",
           "refId": "E"
+        },
+        {
+          "expr": "hoval_kk_drehzahl_pct",
+          "legendFormat": "Istdrehzahl (60-7-1282)",
+          "refId": "F"
         }
-      ]
+      ],
+      "description": "Istdrehzahl = fg=60 fn=7 dp 1282 (Modbus 31921, 0,1 %), Zuordnung wahrscheinlich; fehlt, solange die fn=7-Gruppe stumm ist."
     },
     {
       "id": 10,
@@ -1062,8 +1068,8 @@
     {
       "id": 21,
       "type": "timeseries",
-      "title": "Kältekreis: Überhitzung [K] / Niederdruck [bar]",
-      "description": "fg=60 fn=7 dp 514 = Überhitzung (Modbus 31913, 0,01 K, pCO-DB 0202), dp 518 = Niederdruck relativ (Modbus 31915, 0,01 bar, pCO-DB 0206). B:02-Niederdruck-Serie: ND < 1,1 bar in den ersten 2–4 min nach Verdichterstart. Lücken = fn=7-Gruppe stumm.",
+      "title": "Kältekreis: Überhitzung [K] / Nieder- & Hochdruck [bar]",
+      "description": "fg=60 fn=7 dp 514 = Überhitzung (Modbus 31913, 0,01 K, pCO-DB 0202), dp 518 = Niederdruck relativ (Modbus 31915, 0,01 bar, pCO-DB 0206), dp 519 = Hochdruck relativ (Modbus 31917, 0,01 bar, pCO-DB 0207; Stillstand ≈ ND + 0,1 bar, WW-Ladung 32–35 bar, Kühlen ≈ 22 bar). B:02-Niederdruck-Serie: ND < 1,1 bar in den ersten 2–4 min nach Verdichterstart. Lücken = fn=7-Gruppe stumm.",
       "datasource": {
         "type": "prometheus",
         "uid": "hoxpi-prom"
@@ -1097,6 +1103,22 @@
                 "value": "pressurebar"
               }
             ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Hochdruck"
+            },
+            "properties": [
+              {
+                "id": "custom.axisPlacement",
+                "value": "right"
+              },
+              {
+                "id": "unit",
+                "value": "pressurebar"
+              }
+            ]
           }
         ]
       },
@@ -1110,6 +1132,11 @@
           "expr": "hoval_kk_niederdruck_bar",
           "legendFormat": "Niederdruck",
           "refId": "B"
+        },
+        {
+          "expr": "hoval_kk_hochdruck_bar",
+          "legendFormat": "Hochdruck",
+          "refId": "C"
         }
       ]
     },
