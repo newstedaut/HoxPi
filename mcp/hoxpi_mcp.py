@@ -143,7 +143,7 @@ def get_status() -> dict:
     sg = _rd(27537)
     return {
         "aussentemperatur_c": g(1477),
-        "vorlauf_c": g(18760), "ruecklauf_c": g(1535),
+        "vorlauf_c": g(18760), "ruecklauf_c": _ruecklauf(),
         "warmwasser_ist_c": g(1500), "warmwasser_soll_c": g(1499),
         "raumtemperatur_c": g(1510),
         "wasserdruck_bar": g(18738),
@@ -160,7 +160,15 @@ def get_status() -> dict:
         "sg_offset_ww_k": g(27509), "sg_offset_raum_hk1_k": g(27528),
         "kuehlventil_uka": (_rd(19870) or [None])[0],
         "fehlercode": (_rd(1534) or [None])[0],
+        "fehlercode_hinweis": "0 = kein Wert (FA antwortet nicht, z. B. nach Netz-Ein), 255 = OK" if ((_rd(1534) or [255])[0] == 0) else None,
     }
+
+def _ruecklauf():
+    # 1535 (fg60/fn254 dp29) antwortet nach Netz-Ein nicht (0 = kein Wert) -> Fallback fn=7 dp258 (31895, WP-Ruecklauf)
+    v = g_rl = _scaled(1535)[0]
+    if v in (None, 0, 0.0):
+        v = _scaled(31895)[0]
+    return v
 
 @mcp.tool()
 def diagnose() -> dict:
