@@ -166,7 +166,7 @@ def metrics():
         _ph = None
         if _hk and _uka and _wez:
             if _hk[0] != 22: _ph = 0
-            elif _wez[0] != 0: _ph = 3
+            elif _wez[0] != 0 or (_pel and _pel[0] not in (0x8000, 0xFFFF) and _pel[0] >= 50): _ph = 3  # F1: 1539 stumm -> Pel
             elif _uka[0] != 1: _ph = 0
             elif _vl and _vl[0] not in (0x8000, 0xFFFF):
                 _v = (_vl[0] - 65536 if _vl[0] > 32767 else _vl[0]) / 10.0
