@@ -196,6 +196,10 @@ def metrics():
     for name, spec in R32.items():
         reg, sc = spec[0], spec[1]; sg = len(spec) > 2 and spec[2]
         w = rd(reg, 2)
+        if name == "hoval_cop" and (not w or len(w) < 2 or w[0] in (0x8000, 0xFFFF) or ((w[0] << 16) | w[1]) == 0):
+            # F3 04.09.: 31667 antwortet nach Netz-Ein nicht mehr (0) -> FA-COP dp 45 (27490, U8, 0,1) wie MCP/MQTT
+            _fa = rd(27490)
+            w = [0, _fa[0]] if (_fa and _fa[0] not in (0x8000, 0xFFFF) and _fa[0] <= 200) else [0, 0]  # sonst 0 statt Luecke
         if not w or len(w) < 2: continue
         v = (w[0] << 16) | w[1]
         if v == 0xFFFFFFFF:
