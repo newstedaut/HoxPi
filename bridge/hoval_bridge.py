@@ -85,6 +85,14 @@ EXCL_MIN_INTERVAL = 2.0   # s, Throttle fuer den Partner-Null-Write
 # whitelist.json wird vom Dashboard (Seite "Register") verwaltet; Aenderungen
 # wirken OHNE Neustart (mtime-Check). Fehlt/kaputt -> eingebaute WRITE_WHITELIST.
 WHITELIST_FILE = "/home/admin/hoval-bridge/whitelist.json"
+# R8 (04.09.2026): Warm-Cache - zuletzt vom CAN gesehene Registerwoerter ueberleben
+# einen Bridge-Neustart, damit Loxone nach einem Kaltstart keine 0-Werte sieht
+# (1477 = 0,0 C -> Frostschutz-Latch am 03.09.2026). Geladene Werte zaehlen NICHT
+# als "vom CAN gelesen" (Schreibsperre 1b bleibt aktiv, bis der CAN antwortet).
+CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache_last.json")
+CACHE_INTERVAL = 60.0        # s zwischen zwei Sicherungen
+CACHE_MAX_AGE = 48 * 3600    # s; aeltere Caches werden ignoriert (nur Log)
+CACHE_EXCLUDE = {1534}       # Fehlercode: 0 = "kein Wert" muss nach Neustart sichtbar bleiben
 _wl_cache = {"mtime": None, "set": None}
 def current_whitelist():
     import os as _os
@@ -302,6 +310,67 @@ class Bridge:
             if self.block is not None:
                 self.block.set_internal(r["reg"], to_registers(t, v))
 
+    # ----- R8 Warm-Cache -----
+    def save_cache(self):
+        """Alle je vom CAN dekodierten Registerwoerter atomar sichern."""
+        if self.block is None:
+            return 0
+        try:
+            seen = self._seen_from_can
+            vals = getattr(self.block, "values", {})
+            out = {}
+            for addr, val in list(vals.items()):
+                if addr in seen:
+                    base = addr
+                elif (addr - 1) in seen and (self.regmap.by_reg.get(addr - 1, {}).get("type") or "").upper() in ("U32", "S32"):
+                    base = addr - 1          # zweites Wort eines 32-Bit-Werts
+                else:
+                    continue
+                if base in CACHE_EXCLUDE:
+                    continue
+                out[str(addr)] = int(val)
+            if not out:
+                return 0     # noch nichts vom CAN gesehen -> alten Cache NICHT ueberschreiben
+            tmp = CACHE_FILE + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump({"ts": time.time(), "regs": out}, f)
+            os.replace(tmp, CACHE_FILE)
+            return len(out)
+        except Exception as e:
+            log.warning("cache-save: %s", e)
+            return 0
+
+    def load_cache(self):
+        """Datastore mit dem letzten Stand vorbelegen (ohne _seen_from_can zu setzen)."""
+        try:
+            if not os.path.exists(CACHE_FILE):
+                log.info("Warm-Cache: keine Datei %s (Kaltstart, alles 0)", CACHE_FILE)
+                return 0
+            data = json.load(open(CACHE_FILE, encoding="utf-8"))
+            age = time.time() - float(data.get("ts", 0))
+            if age > CACHE_MAX_AGE:
+                log.warning("Warm-Cache ignoriert: %.1f h alt (> %.0f h)", age / 3600, CACHE_MAX_AGE / 3600)
+                return 0
+            n = 0
+            for k, v in data.get("regs", {}).items():
+                addr = int(k)
+                if addr in CACHE_EXCLUDE:
+                    continue
+                self.block.set_internal(addr, [int(v) & 0xFFFF])
+                n += 1
+            self._cache_loaded = n
+            self._cache_age = age
+            log.info("Warm-Cache geladen: %d Registerwoerter, %.1f min alt (gelten als stale, bis der CAN antwortet)", n, age / 60)
+            return n
+        except Exception as e:
+            log.warning("cache-load: %s", e)
+            return 0
+
+    def cache_loop(self):
+        while True:
+            time.sleep(CACHE_INTERVAL)
+            self.save_cache()
+
     def rx_loop(self):
         for msg in self.bus:
             if msg is None:
@@ -432,6 +501,17 @@ class Bridge:
                          self.rx_count, self.dec_count, self.err_count)
         # Modbus + Poll
         self.context, self.block = build_modbus(self.regmap, self.on_write)
+        self.load_cache()
+        threading.Thread(target=self.cache_loop, daemon=True).start()
+        import signal
+        def _on_term(signum, frame):
+            n = self.save_cache()
+            log.info("SIGTERM: Warm-Cache gesichert (%d Woerter), beende", n)
+            raise SystemExit(0)
+        try:
+            signal.signal(signal.SIGTERM, _on_term)
+        except Exception as e:
+            log.debug("signal: %s", e)
         if not self.args.no_poll:
             wez, hv = self.build_targets()
             log.info("Poll: %d WEZ (alle %ss) + %d Lueftung (alle 5s)",
