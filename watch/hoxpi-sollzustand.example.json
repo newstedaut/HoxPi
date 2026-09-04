@@ -1,0 +1,16 @@
+{
+  "_doku": "Target state of the Hoval basic operating mode, restored by hoval_sollzustand.py (cron */5, user admin). Registers must be on the bridge whitelist. Pause the guard: create the file /home/admin/WARTUNG. Values below are the reference system (relay-free Loxone control) - adapt them to your system or remove registers you do not want guarded.",
+  "register": {
+    "1561": 1,
+    "1478": 4,
+    "27510": 3,
+    "27546": 2
+  },
+  "_register_doku": {
+    "1561": "operating mode heat generator: 1 = automatic",
+    "1478": "operating mode heating circuit 1: 4 = constant (bus-driven demand)",
+    "27510": "control strategy: 3 = constant",
+    "27546": "Smart-Grid trigger: 2 = system bus (SG-Ready via Modbus registers 27509/27537)"
+  },
+  "bestaetigungen": 2
+}

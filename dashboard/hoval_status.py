@@ -1330,6 +1330,10 @@ function stoggle(on){
         ("keepalive","⚙️",("Bus-Ansteuerung (Keepalive)","Bus control (keepalive)"),
          ("Hält Regelstrategie 3 und die bus-getriebene Konstantanforderung (Eingänge 30-046/057/066 = AUS). Nötig für die relais-freie Heiz-/Kühlsteuerung über Loxone.",
            "Keeps control strategy 3 and the bus-driven constant demand (inputs 30-046/057/066 = OFF). Required for relay-free heating/cooling control via Loxone."),True),
+        # Backlog R5: Sollzustands-Waechter (hoval_sollzustand.py, Cron */5) - stellt die Grund-Betriebsart selbst wieder her
+        ("sollzustand","\U0001F6E1",("Sollzustands-Wächter","Setpoint-state guard"),
+         ("Stellt nach Stromausfall oder Wartung die Grund-Betriebsart selbst wieder her (z. B. 1561 Automatik, 1478 Konstant, 27510 Strategie 3, 27546 Systembus) – Register in /home/admin/hoxpi-sollzustand.json, Schreiben nur über die Bridge-Whitelist. Pause: Datei /home/admin/WARTUNG anlegen.",
+           "Restores the basic operating mode by itself after a power cut or service visit (e.g. 1561 automatic, 1478 constant, 27510 strategy 3, 27546 system bus) – registers in /home/admin/hoxpi-sollzustand.json, writes only via the bridge whitelist. Pause: create the file /home/admin/WARTUNG."),False),
     ]
     WATCH_CONF_F = "/home/admin/hoval-watch/config.json"
     WATCH_DEFAULTS = {"mqtt": True, "webhook_url": None, "max_starts_per_h": 5, "ww_delta_k": 10, "ww_hours": 4}
@@ -1485,6 +1489,21 @@ function stoggle(on){
                     except Exception: st = {}
                     n = len(st.get("active", []))
                     return (L("aktiver Alarm!","active alarm!") if n else L("keine Alarme","no alarms")), (n>0)
+                if key == "sollzustand":
+                    if _o.path.exists("/home/admin/WARTUNG"):
+                        return L("WARTUNG-Flag gesetzt – Wächter pausiert","maintenance flag set – guard paused"), True
+                    try:
+                        with open("/home/admin/sollzustand.log", encoding="utf-8", errors="replace") as f:
+                            kor = [l for l in f.read().splitlines() if "KORRIGIERT" in l]
+                    except Exception: kor = []
+                    if not kor:
+                        return L("keine Korrektur nötig","no correction needed"), False
+                    last = kor[-1][:16]
+                    try:
+                        t = datetime.datetime.strptime(last, "%Y-%m-%d %H:%M")
+                        recent = (datetime.datetime.now() - t).total_seconds() < 86400
+                    except Exception: recent = False
+                    return f"{L('letzte Korrektur','last correction')}: {last[5:]} · {len(kor)}", recent
                 if key == "mqtt_ha":
                     a = subprocess.run(["systemctl","is-active","hoval-mqtt"],capture_output=True,text=True,timeout=4).stdout.strip()=="active"
                     return (L("Dienst läuft","service running") if a else L("Dienst gestoppt","service stopped")), False
