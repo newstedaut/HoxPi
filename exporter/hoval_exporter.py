@@ -48,6 +48,7 @@ R16 = {
 INVALID16 = {
  "hoval_leistung_soll_heizen_pct": {-1270}, "hoval_leistung_soll_ww_pct": {-1270},
  "hoval_leistung_soll_kuehlen_pct": {-1270}, "hoval_leistung_soll_aktiv_pct": {-1270},
+ "hoval_fa_ruecklauf_c": {0},  # 0 = kein Wert (FA antwortet nach Netz-Ein nicht)
 }
 # name -> (highreg, scale[, signed])
 R32 = {
@@ -76,6 +77,8 @@ HELP = {
  "hoval_stoerungsflag": "Register 1540: 0=keine, 8=Blockierung/Verriegelung aktiv",
  "hoval_leistung_soll_aktiv_pct": "aktiver Leistungs-Sollwert (-100=keine Anforderung; -127=ungueltig wird unterdrueckt)",
  "hoval_wp_pumpe_pct": "Drehzahl WP-Umwaelzpumpe (0=aus)",
+ "hoval_ruecklauf_c": "Ruecklauf 1535 (Kaeltekreisregler); liefert 1535 nach Netz-Ein 0, wird der WP-Ruecklauf 60-7-258 (31894/31895) ausgegeben",
+ "hoval_fa_ruecklauf_c": "Ruecklauf 1535 roh (60-254-29), fehlt solange die FA nach Netz-Ein nicht antwortet",
  "hoval_ww_status": "0=Aus 1=Laden 8=Laden reduziert 12=SmartGrid",
  "hoval_sg_status": "0=Normal 1=Vorzug 2=Gesperrt 3=Abnahmezwang",
 }
@@ -117,6 +120,13 @@ def metrics():
         if not w: continue
         v = w[0]
         if v in (0x8000, 0xFFFF): continue
+        if name == "hoval_ruecklauf_c" and v == 0:  # 1535 nach Netz-Ein stumm (0 = kein Wert) -> WP-Ruecklauf 60-7-258 (S32)
+            w2 = rd(31894, 2)
+            if not w2 or len(w2) < 2: continue
+            v = (w2[0] << 16) | w2[1]
+            if v in (0xFFFFFFFF, 0x80000000): continue
+            if v > 0x7FFFFFFF: v -= 0x100000000
+            if not -500 <= v <= 1500: continue
         if sg and v > 32767: v -= 65536
         if v in INVALID16.get(name, ()): continue
         if _copf and name in ("hoval_fa_cop",) and not (0 <= v*sc <= 20): continue  # COP-Plausibilitaet
