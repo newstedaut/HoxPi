@@ -40,7 +40,7 @@ Danach weiter bei Abschnitt **7** (2FA) und **8** (Inbetriebnahme-Assistent). Di
 **CAN-Verkabelung (passiv & parallel — bestehender Bus läuft unverändert weiter):**
 - Abgriff am Hoval **WEZ-Modul**, Klemme **„+ ⏚ H L"** (der echte TopTronic-E-CAN, 50 kbit/s, 64 Ω terminiert).
 - **H, L, ⏚** parallel mit aufklemmen. ⚠ **Aderfarben bitte an der eigenen Anlage prüfen** — sie sind nicht überall gleich.
-- **Nicht** an Klemme X4 anschließen — das ist RS485, kein CAN.
+- **Nicht** an Klemme X4 anschließen — das ist RS485 (Innen- ↔ Außeneinheit, WFA-201 Klemmen 130/131/132 ↔ WFA-200, Hoval-Schema Blatt 5), kein CAN. Der TopTronic-CAN liegt nur am WEZ-Modul.
 
 ---
 

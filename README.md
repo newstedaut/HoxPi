@@ -49,7 +49,7 @@ Live dashboard on the Pi (port 80) — no cloud, German/English:
 | USB-CAN adapter | tested: DSD-TECH SH-C30G |
 | microSD ≥ 16 GB, PSU 5 V/3 A | PoE splitter works too |
 
-CAN wiring: tap the bus **in parallel** at the Hoval **WEZ module**, terminal "+ ⏚ H L" (H/L/GND). The existing bus keeps running — HoxPi listens passively and polls politely. **Do not** use terminal X4 (that is RS-485, not CAN).
+CAN wiring: tap the bus **in parallel** at the Hoval **WEZ module**, terminal "+ ⏚ H L" (H/L/GND). The existing bus keeps running — HoxPi listens passively and polls politely. **Do not** use terminal X4 (that is the RS-485 link indoor ↔ outdoor unit, not CAN).
 
 > **ESP32 instead of a Pi?** [`esp32-gateway/`](esp32-gateway/README.md) holds an ESP-IDF port of the bridge core (CAN ↔ Modbus-TCP :502, same register map, same write safeguards) for PoE boards like Olimex ESP32-EVB or Waveshare ESP32-S3-POE-ETH. Protocol core is verified against this bridge on the host (`test/`); not yet run on hardware.
 
