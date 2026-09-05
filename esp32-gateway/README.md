@@ -127,8 +127,8 @@ Gegenstück zum HoxPi-Dashboard, bewusst klein (eine statische HTML-Seite, JSON-
 
 | Route                  | Bedeutung |
 |------------------------|-----------|
-| `GET /`                | Minimalseite: Laufzeit, CAN-Zähler, stale-Warnung, Modbus/Whitelist/Poll, Kernwerte (1501, 1534, 1477, 1525, 1535, 1500, 1499, 1537, 25611, 27490) |
-| `GET /status`          | dasselbe als JSON (`can.stale` = > 10 min kein Datenpunkt, `values.<reg>.seen` = Kalt-Cache-Schutz-Bit, `config.restart_required`) |
+| `GET /`                | Minimalseite: Laufzeit, CAN-Zähler, stale-Warnung, Modbus/Whitelist/Poll, MQTT-Zeile, Kernwerte (1501, 1534, 1477, 1525, 1535, 1500, 1499, 1537, 25611, 27490) |
+| `GET /status`          | dasselbe als JSON (`can.stale` = > 10 min kein Datenpunkt, `values.<reg>.seen` = Kalt-Cache-Schutz-Bit, `config.restart_required`, `mqtt` = `{"enabled":false}` oder `{enabled, connected, pub_ok, pub_fail, cmd_ok, cmd_rej}` aus `hmq_stats()`) |
 | `GET /config`          | Poll-Werte, `wr_en` (NVS/Kconfig) vs. `write_effective` (beim Start übernommen), Whitelist als Liste, Herkunft je Wert (`from_nvs`) |
 | `POST /config`         | Body `{"poll_wez":60,"poll_hv":5,"poll_delay":100,"wr_en":1,"whitelist":"1490,1497"}` (Whitelist auch als `[1490,1497]`, leer = nichts schreibbar). Alles-oder-nichts-Prüfung (Grenzen wie NVS), dann **live** anwenden (Poll-Werte/Whitelist sofort; `wr_en` erst nach Neustart → `restart_required`) und im NVS sichern; Antwort = neue Konfig |
 | `POST /config/reset`   | NVS-Namespace löschen → nächster Start mit Kompilat-Defaults |
@@ -213,3 +213,4 @@ mit Beispiel- **und** echter 555er-Tabelle. `make syntax` deckt auch `hoval_http
   `/config/reset`, `/restart`, `/register?reg=N`; Token-Schutz `HOXPI_HTTP_TOKEN`; `test_json.c` (20 POST-Fälle).
 - 05.09.2026 MQTT/Home Assistant (`hoval_ha.[ch]`, `hoval_mqtt.[ch]`): Port von `mqtt/hoval_mqtt.py` (Topics, Discovery,
   Enum-Texte, Sonderregeln, Kommandos → `hm_write()`); `test_ha.c` + `ref_ha.py` (44/44 Payloads gegen die Python-Tabellen).
+- 05.09.2026 `/status` + Startseite zeigen die MQTT-Zähler (`mqtt.connected/pub_ok/pub_fail/cmd_ok/cmd_rej`, Version esp32-0.5).

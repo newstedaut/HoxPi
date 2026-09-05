@@ -31,5 +31,9 @@ esp32-gateway/dependencies.lock
 esp32-gateway/test/test_proto
 esp32-gateway/test/out_*.txt
 esp32-gateway/test/test_cfg
+esp32-gateway/test/test_json
+esp32-gateway/test/test_ha
+esp32-gateway/test/out_*.json
+esp32-gateway/test/out_*.jsonl
 nvs_config.csv
 nvs.bin

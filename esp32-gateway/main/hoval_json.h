@@ -43,6 +43,9 @@ typedef struct {
     const hcfg_t *cfg;
     uint16_t wl_active_n;           /* aktive Whitelist-Laenge (Kompilat oder NVS) */
     bool     restart_required;      /* wr_en im NVS != wirksamer Schreibpfad */
+    /* MQTT (hmq_stats_t); mqtt_enabled = URI konfiguriert. Bei false nur {"enabled":false}. */
+    bool     mqtt_enabled, mqtt_connected;
+    uint32_t mqtt_pub_ok, mqtt_pub_fail, mqtt_cmd_ok, mqtt_cmd_rej;
 } hj_status_in_t;
 
 /* Gesamtstatus als JSON. read darf NULL sein (dann ohne "values"). Liefert Laenge ohne NUL;

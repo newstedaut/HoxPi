@@ -106,6 +106,15 @@ size_t hj_status_json(char *out, size_t cap, const hj_status_in_t *in, hj_read_c
     jw_raw(&w, "},");
     jw_fmt(&w, "\"modbus\":{\"port\":%u,\"write_enabled\":", in->modbus_port); jw_bool(&w, in->write_enabled);
     jw_fmt(&w, "},\"table\":{\"registers\":%u,\"areas\":%u},", in->regs_count, in->areas_count);
+    /* MQTT-Zaehler wie hmq_stats(): pub_ok/pub_fail = Veroeffentlichungen, cmd_ok/cmd_rej = hoval/<key>/set */
+    jw_raw(&w, "\"mqtt\":{\"enabled\":"); jw_bool(&w, in->mqtt_enabled);
+    if (in->mqtt_enabled) {
+        jw_raw(&w, ",\"connected\":"); jw_bool(&w, in->mqtt_connected);
+        jw_fmt(&w, ",\"pub_ok\":%lu,\"pub_fail\":%lu,\"cmd_ok\":%lu,\"cmd_rej\":%lu",
+               (unsigned long)in->mqtt_pub_ok, (unsigned long)in->mqtt_pub_fail,
+               (unsigned long)in->mqtt_cmd_ok, (unsigned long)in->mqtt_cmd_rej);
+    }
+    jw_raw(&w, "},");
     jw_raw(&w, "\"config\":{");
     jw_config_body(&w, in->cfg, in->wl_active_n, in->write_enabled, in->restart_required);
     jw_raw(&w, "}");
