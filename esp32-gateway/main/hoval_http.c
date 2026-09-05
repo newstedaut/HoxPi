@@ -9,6 +9,7 @@
 #include "hoval_proto.h"
 #include "hoval_can.h"
 #include "hoval_modbus.h"
+#include "hoval_mqtt.h"
 #include <string.h>
 #include <stdlib.h>
 #include "esp_log.h"
@@ -30,7 +31,7 @@
 #define CONFIG_HOXPI_MODBUS_PORT 502
 #endif
 
-#define HH_VERSION   "esp32-0.4"
+#define HH_VERSION   "esp32-0.5"
 #define HH_BODY_MAX  (HCFG_WL_TEXT_MAX + 256)   /* laengster sinnvoller /config-Body */
 #define HH_OUT_MAX   4096                        /* /status mit voller Whitelist (128 Eintraege) < 3 KB */
 
@@ -99,7 +100,9 @@ static const char INDEX_HTML[] =
 "<span class='${j.can.stale?'warn':'ok'}'>${j.can.stale?'STALE: keine Hoval-Antwort':'CAN lebt, letzter DP vor '+j.can.last_rx_age_s+' s'}</span><br>"
 "Modbus-TCP :${j.modbus.port}, Schreiben ${j.modbus.write_enabled?'AN':'AUS'}${j.config.restart_required?' <span class=warn>(NVS abweichend – Neustart noetig)</span>':''}, "
 "Whitelist ${j.config.whitelist_n} Register (${j.config.whitelist_src}), Poll WEZ ${j.config.poll_wez} s / HV ${j.config.poll_hv} s / Abstand ${j.config.poll_delay} ms, "
-"Tabelle ${j.table.registers} Register in ${j.table.areas} Bereichen`;"
+"Tabelle ${j.table.registers} Register in ${j.table.areas} Bereichen<br>"
+"MQTT ${!j.mqtt.enabled?'aus':`<span class='${j.mqtt.connected?'ok':'warn'}'>${j.mqtt.connected?'verbunden':'GETRENNT'}</span>, "
+"publiziert ${j.mqtt.pub_ok} (Fehler ${j.mqtt.pub_fail}), Kommandos ${j.mqtt.cmd_ok} ok / ${j.mqtt.cmd_rej} abgelehnt`}`;"
 "let h='';for(const r in j.values){const v=j.values[r];h+=`<tr><td>${r}</td><td>${N[r]||''}</td><td>${f(v.val,v.dec)}</td><td>${v.seen?'':'<span class=warn>nie gelesen</span>'}</td></tr>`}"
 "document.getElementById('t').innerHTML=h}).catch(e=>{document.getElementById('s').textContent='Fehler: '+e})"
 "</script>";
@@ -115,6 +118,7 @@ static esp_err_t h_status(httpd_req_t *req)
     const hc_stats_t *s = hc_stats();
     uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
     uint16_t wn = 0; hp_whitelist_active(&wn);
+    hmq_stats_t mq = { 0 }; hmq_stats(&mq);
     hj_status_in_t in = {
         .version = HH_VERSION,
         .uptime_s = now_ms / 1000,
@@ -128,6 +132,8 @@ static esp_err_t h_status(httpd_req_t *req)
         .regs_count = hp_regs_count, .areas_count = hp_areas_count,
         .cfg = hcfg_get(), .wl_active_n = wn,
         .restart_required = restart_required(),
+        .mqtt_enabled = hmq_enabled(), .mqtt_connected = mq.connected,
+        .mqtt_pub_ok = mq.pub_ok, .mqtt_pub_fail = mq.pub_fail, .mqtt_cmd_ok = mq.cmd_ok, .mqtt_cmd_rej = mq.cmd_rej,
     };
     char *out = malloc(HH_OUT_MAX);
     if (!out) return send_error(req, "500 Internal Server Error", "kein Speicher");

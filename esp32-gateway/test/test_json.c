@@ -40,6 +40,7 @@ int main(void)
         .have_rx = true, .last_rx_age_s = 12, .modbus_port = 502, .write_enabled = false,
         .regs_count = hp_regs_count, .areas_count = hp_areas_count, .cfg = hcfg_get(), .wl_active_n = 0,
         .restart_required = false,
+        .mqtt_enabled = false,
     };
     size_t n = hj_status_json(out, sizeof out, &in, fake_read);
     assert(n > 0 && n < sizeof out && strlen(out) == n);
@@ -47,6 +48,7 @@ int main(void)
     assert(has(out, "\"uptime_s\":3661") && has(out, "\"rx_frames\":1000") && has(out, "\"bus_off\":0"));
     assert(has(out, "\"last_rx_age_s\":12,\"stale\":false"));
     assert(has(out, "\"modbus\":{\"port\":502,\"write_enabled\":false}"));
+    assert(has(out, "\"mqtt\":{\"enabled\":false},\"config\":{"));            /* aus: keine Zaehler */
     assert(has(out, "\"poll_wez\":30,\"poll_hv\":5,\"poll_delay\":100,\"wr_en\":false"));
     assert(has(out, "\"whitelist_src\":\"compiled\""));
     assert(has(out, "\"1501\":{\"type\":\"U8\",\"dec\":0,\"seen\":true,\"raw\":22,\"val\":22}"));
@@ -62,6 +64,16 @@ int main(void)
     in.have_rx = true; in.last_rx_age_s = 601;
     hj_status_json(out, sizeof out, &in, NULL);
     assert(has(out, "\"stale\":true"));
+
+    /* MQTT an: hmq_stats()-Zaehler erscheinen (Vorbild: Exporter hoxpi_mqtt_* / Dashboard-Karte) */
+    in.mqtt_enabled = true; in.mqtt_connected = true;
+    in.mqtt_pub_ok = 4711; in.mqtt_pub_fail = 2; in.mqtt_cmd_ok = 3; in.mqtt_cmd_rej = 1;
+    hj_status_json(out, sizeof out, &in, NULL);
+    assert(has(out, "\"mqtt\":{\"enabled\":true,\"connected\":true,\"pub_ok\":4711,\"pub_fail\":2,\"cmd_ok\":3,\"cmd_rej\":1}"));
+    in.mqtt_connected = false;
+    hj_status_json(out, sizeof out, &in, NULL);
+    assert(has(out, "\"enabled\":true,\"connected\":false,"));
+    in.mqtt_enabled = false;
 
     /* Abschneiden: Rueckgabe >= cap, Puffer bleibt NUL-terminiert */
     char small[64];
