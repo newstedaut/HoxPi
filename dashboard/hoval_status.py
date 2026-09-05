@@ -612,6 +612,24 @@ echo "FERTIG! In Claude einfach fragen: Wie geht es meiner Heizung?"
 """.replace("HOSTIP", host)
 
 # Eigene Zuordnung pro Anlage: labels.json = {"19659":"Untergeschoss", ...}
+BRIDGE_STATE_PATH = "/home/admin/hoval-bridge/bridge_state.json"
+def bridge_state():
+    """R8b: Zustandsbericht der Bridge (alle 15 s); {} wenn fehlt/aelter als 3 min."""
+    try:
+        if _time.time() - os.path.getmtime(BRIDGE_STATE_PATH) > 180: return {}
+        with open(BRIDGE_STATE_PATH, encoding="utf-8") as f: st = json.load(f)
+        return st if isinstance(st, dict) else {}
+    except Exception:
+        return {}
+def cache_stale_note():
+    """Banner-Text, solange Werte noch aus dem Warm-Cache stammen (nach Bridge-Neustart)."""
+    st = bridge_state()
+    n = int(st.get("stale") or 0)
+    if n <= 0: return ""
+    age = int(st.get("cache_age_s") or 0) // 60
+    up = int(_time.time() - float(st.get("start") or _time.time())) // 60
+    return L(f"Warm-Cache: {n} von {st.get('cache_loaded', '?')} Werten stammen noch vom Stand vor dem Brücken-Neustart (Sicherung {age} min alt, Brücke läuft seit {up} min) – der Regler hat sie noch nicht neu geliefert. Diese Register bleiben bis dahin schreibgesperrt.",
+             f"Warm cache: {n} of {st.get('cache_loaded', '?')} values still come from before the bridge restart (snapshot {age} min old, bridge up for {up} min) – the controller has not re-sent them yet. Those registers stay write-protected until then.")
 LABELS_PATH = "/home/admin/hoval-bridge/labels.json"
 _lblc = {"t": 0, "v": {}}
 def get_labels():
@@ -1749,13 +1767,15 @@ function apost(url, body, msgid){
           + '</div></div>')
 
     def home(self):
+        _cs = cache_stale_note()  # R8b
+        _stat = (f'<div class="v" style="font-size:1.05rem;color:#b26a00" title="{html.escape(_cs)}">♻️ ' + L("Warm-Cache aktiv", "warm cache active") + f" ({bridge_state().get('stale')})</div>") if _cs else ('<div class="v ok" style="font-size:1.05rem">' + L("aktiv · liest live","active · reading live") + "</div>")
         return f"""<h1>{L("Deine Hoval-Anlage im Netzwerk","Your Hoval system on the network")}</h1>
 <p>{L("Dieser Raspberry Pi liest <b>Wärmepumpe</b> und <b>Wohnraumlüftung</b> über den Hoval-CAN-Bus aus und stellt alle Werte als <b>Modbus-TCP</b> bereit — wie der originale Hoval-Gateway. So können <b>Loxone</b> und <b>Home Assistant</b> die Anlage lesen (und gezielt steuern), ganz ohne Cloud.","This Raspberry Pi reads the <b>heat pump</b> and <b>ventilation</b> over the Hoval CAN bus and exposes every value as <b>Modbus-TCP</b> — just like the original Hoval gateway. So <b>Loxone</b> and <b>Home Assistant</b> can read (and selectively control) the system, entirely without cloud.")}</p>
 {schema()}
 <div class="grid3" style="margin-top:1rem">
   <div class="card"><div class="n">{L("Datenfluss","Data flow")}</div><div class="v" style="font-size:1rem">CAN → Pi → Modbus</div></div>
   <div class="card"><div class="n">{L("Adresse (Modbus-TCP)","Address (Modbus-TCP)")}</div><div class="v" style="font-size:1.05rem">192.168.1.50:502</div></div>
-  <div class="card"><div class="n">{L("Status","Status")}</div><div class="v ok" style="font-size:1.05rem">{L("aktiv · liest live","active · reading live")}</div></div>
+  <div class="card"><div class="n">{L("Status","Status")}</div>{_stat}</div>
 </div>
 <div class="domain"><div class="dh" style="background:#c2185b;background-image:linear-gradient(90deg,rgba(255,255,255,.15),rgba(255,255,255,0))"><span class="ic">🛒</span><h2>{L("Hardware-Vorschlag","Hardware suggestion")}</h2></div><div class="dbody">
 <p>{L("Das braucht man, um HoxPi nachzubauen — günstige Standardteile:","What you need to build HoxPi — inexpensive standard parts:")}</p>
@@ -1793,6 +1813,9 @@ function apost(url, body, msgid){
         _kw = kuehl_wartet(vals)
         if _kw is not None:
             out.append(f'<div class="note warn">⏳ {html.escape(kuehl_wartet_txt(_kw))}</div>')
+        _cs = cache_stale_note()  # R8b: Werte noch aus dem Warm-Cache?
+        if _cs:
+            out.append(f'<div class="note warn">♻️ {html.escape(_cs)}</div>')
         dcol = {"Wärmepumpe":"#e2001a","Heizung & Kühlung":"#e2001a","Warmwasser":"#c2185b","Wohnraumlüftung":"#69b41e"}
         for title, icon, subs in DOMAINS:
             c = dcol.get(title, "#e2001a")

@@ -94,6 +94,9 @@ CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache_las
 CACHE_INTERVAL = 60.0        # s zwischen zwei Sicherungen
 CACHE_MAX_AGE = 48 * 3600    # s; aeltere Caches werden ignoriert (nur Log)
 CACHE_EXCLUDE = {1534}       # Fehlercode: 0 = "kein Wert" muss nach Neustart sichtbar bleiben
+# R8b (05.09.2026): Zustandsdatei fuer Dashboard/Exporter (stale = geladen, vom CAN noch nicht bestaetigt)
+STATE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bridge_state.json")
+STATE_INTERVAL = 15.0        # s zwischen zwei Zustandsberichten
 _wl_cache = {"mtime": None, "set": None}
 def current_whitelist():
     import os as _os
@@ -187,6 +190,10 @@ class Bridge:
         self._last_write = {}
         self._pending = {}   # Mehrfach-Frame-Reassembly: (devkey,seq) -> [bytearray, remaining, timestamp]
         self._seen_from_can = set()  # Register, die schon mind. 1x vom CAN dekodiert wurden
+        self._cache_regs = set()     # R8b: beim Start aus dem Warm-Cache vorbelegte Registerwoerter
+        self._cache_loaded = 0
+        self._cache_age = 0.0
+        self._t0 = time.time()
         self._send_lock = threading.Lock()
 
     def open_can(self):
@@ -358,6 +365,7 @@ class Bridge:
                 if addr in CACHE_EXCLUDE:
                     continue
                 self.block.set_internal(addr, [int(v) & 0xFFFF])
+                self._cache_regs.add(addr)
                 n += 1
             self._cache_loaded = n
             self._cache_age = age
@@ -367,10 +375,34 @@ class Bridge:
             log.warning("cache-load: %s", e)
             return 0
 
+    def write_state(self):
+        """R8b: kleiner Zustandsbericht fuer Dashboard/Exporter (atomar, alle STATE_INTERVAL s)."""
+        try:
+            seen = self._seen_from_can
+            def confirmed(addr):
+                if addr in seen:
+                    return True
+                return (addr - 1) in seen and (self.regmap.by_reg.get(addr - 1, {}).get("type") or "").upper() in ("U32", "S32")
+            stale = sorted(a for a in self._cache_regs if not confirmed(a))
+            st = {"ts": time.time(), "start": self._t0, "cache_loaded": self._cache_loaded,
+                  "cache_age_s": int(self._cache_age), "stale": len(stale), "stale_regs": stale[:50],
+                  "seen_can": len(seen), "rx": self.rx_count, "dec": self.dec_count, "err": self.err_count}
+            tmp = STATE_FILE + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(st, f)
+            os.replace(tmp, STATE_FILE)
+        except Exception as e:
+            log.debug("state-write: %s", e)
+
     def cache_loop(self):
+        self.write_state()
+        n = 0
         while True:
-            time.sleep(CACHE_INTERVAL)
-            self.save_cache()
+            time.sleep(STATE_INTERVAL)
+            n += 1
+            if n % max(1, int(CACHE_INTERVAL // STATE_INTERVAL)) == 0:
+                self.save_cache()
+            self.write_state()
 
     def rx_loop(self):
         for msg in self.bus:
