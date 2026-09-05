@@ -3,7 +3,7 @@
   "title": "HoxPi Wärmepumpe",
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 4,
+  "version": 5,
   "refresh": "1m",
   "time": {
     "from": "now-24h",
@@ -1265,6 +1265,319 @@
           "expr": "hoval_fa_wez_temp_c",
           "legendFormat": "WP-Vorlauf °C (1525)",
           "refId": "B"
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "type": "stat",
+      "title": "Warm-Cache: stale Register",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "hoxpi-prom"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 5,
+        "x": 0,
+        "y": 85
+      },
+      "description": "Backlog R8/R8b: Register, die beim Bridge-Start aus cache_last.json vorbelegt wurden und noch nicht vom CAN bestätigt sind. 0 = alle Werte live. Nach einem Neustart typ. 150 → 0 in ~45 s; bleibt der Wert > 0, antwortet ein Block (fg=10/Lüftung/fn=7) nicht.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "—",
+          "mappings": [],
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 50
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "expr": "hoxpi_cache_stale",
+          "legendFormat": "stale",
+          "instant": true,
+          "range": false,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 24,
+      "type": "stat",
+      "title": "Warm-Cache geladen",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "hoxpi-prom"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 5,
+        "x": 5,
+        "y": 85
+      },
+      "description": "Anzahl Wörter, die beim letzten Bridge-Start aus cache_last.json geladen wurden (max. 48 h alt, 1534 ausgenommen). 0 = Kaltstart ohne Cache → Loxone bekäme 0-Werte (Frostschutz-Latch-Risiko).",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "—",
+          "mappings": [],
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "orange",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 1
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "expr": "hoxpi_cache_loaded",
+          "legendFormat": "geladen",
+          "instant": true,
+          "range": false,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 25,
+      "type": "stat",
+      "title": "CAN-Register gesehen",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "hoxpi-prom"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 5,
+        "x": 10,
+        "y": 85
+      },
+      "description": "Wörter, die seit Bridge-Start mindestens einmal live vom CAN gelesen wurden (Soll ≈ 455 bei allen Blöcken).",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "—",
+          "mappings": [],
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "red",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 300
+              },
+              {
+                "color": "green",
+                "value": 440
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "expr": "hoxpi_can_registers_seen",
+          "legendFormat": "seen",
+          "instant": true,
+          "range": false,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 26,
+      "type": "stat",
+      "title": "Bridge-Laufzeit",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "hoxpi-prom"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 5,
+        "x": 15,
+        "y": 85
+      },
+      "description": "Sekunden seit dem letzten Start des hoval-bridge-Dienstes (aus bridge_state.json, alle 15 s). Kurze Laufzeit = Neustart/Absturz prüfen (journalctl -u hoval-bridge).",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dtdurations",
+          "noValue": "—",
+          "mappings": [],
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "orange",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 600
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "value",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "wideLayout": true
+      },
+      "targets": [
+        {
+          "expr": "hoxpi_bridge_uptime_seconds",
+          "legendFormat": "uptime",
+          "instant": true,
+          "range": false,
+          "refId": "A"
+        }
+      ]
+    },
+    {
+      "id": 27,
+      "type": "timeseries",
+      "title": "Warm-Cache stale (Verlauf)",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "hoxpi-prom"
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 4,
+        "x": 20,
+        "y": 85
+      },
+      "description": "Verlauf von hoxpi_cache_stale — Spitzen = Bridge-Neustarts; sollte jeweils in < 1 min auf 0 fallen.",
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 20,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "hidden",
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "expr": "hoxpi_cache_stale",
+          "legendFormat": "stale",
+          "refId": "A"
         }
       ]
     }
