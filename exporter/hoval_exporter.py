@@ -101,6 +101,10 @@ HELP = {
  "hoval_kuehl_wartet": "1 = Kuehlen angefordert, Verdichter steht noch (Phase 1 oder 2); kein Fehler, der Regler startet erst ab WP-Vorlauf 19,5 C",
  "hoval_ww_status": "0=Aus 1=Laden 8=Laden reduziert 12=SmartGrid",
  "hoval_sg_status": "0=Normal 1=Vorzug 2=Gesperrt 3=Abnahmezwang",
+ "hoxpi_cache_stale": "R8b: Registerwoerter, die nach dem Bridge-Neustart noch aus dem Warm-Cache stammen (vom CAN noch nicht bestaetigt); 0 = alles live",
+ "hoxpi_cache_loaded": "R8b: beim Bridge-Start aus cache_last.json vorbelegte Registerwoerter",
+ "hoxpi_can_registers_seen": "R8b: Register, die seit dem Bridge-Start mindestens einmal vom CAN dekodiert wurden",
+ "hoxpi_bridge_uptime_seconds": "R8b: Laufzeit des Bridge-Prozesses",
 }
 _tid = [0]
 _conn = {"sock": None}
@@ -217,6 +221,22 @@ def metrics():
         if name in HELP: out.append(f"# HELP {name} {HELP[name]}")
         out.append(f"# TYPE {name} {typ}")
         out.append(f"{name} {round(v*sc, 4)}")
+    # R8b (05.09.2026): Warm-Cache-Zustand der Bridge aus bridge_state.json (alle 15 s geschrieben)
+    try:
+        import os as _o, time as _t
+        _sf = "/home/admin/hoval-bridge/bridge_state.json"
+        if _o.path.exists(_sf) and _t.time() - _o.path.getmtime(_sf) < 180:
+            _st = _j.load(open(_sf))
+            _vals = {"hoxpi_cache_stale": _st.get("stale"), "hoxpi_cache_loaded": _st.get("cache_loaded"),
+                     "hoxpi_can_registers_seen": _st.get("seen_can"),
+                     "hoxpi_bridge_uptime_seconds": (int(_t.time() - float(_st["start"])) if "start" in _st else None)}
+            for _m, _v in _vals.items():
+                if _v is None: continue
+                out.append(f"# HELP {_m} {HELP[_m]}")
+                out.append(f"# TYPE {_m} gauge")
+                out.append(f"{_m} {int(_v)}")
+    except Exception:
+        pass
     return "\n".join(out) + "\n"
 
 class H(http.server.BaseHTTPRequestHandler):
