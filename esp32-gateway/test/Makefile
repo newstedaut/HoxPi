@@ -2,6 +2,7 @@
 #   make test            baut test_proto mit regmap_example.h, fuehrt es aus und vergleicht
 #                        die Frame-/Dekodier-Ausgabe mit der Python-Referenz (bridge/hoval_bridge.py);
 #                        dazu test_cfg (Laufzeit-Konfiguration: Whitelist-Text, Grenzen, Override)
+#                        und test_json (Statusseite: /status-, /config-JSON + POST-Body-Zerlegung)
 #   make REGMAP=../main/regmap_gen.h test    dasselbe mit der echten, generierten Tabelle
 #   make syntax          Syntaxpruefung der ESP-IDF-Module gegen Stub-Header (idf_stubs/)
 CC      ?= gcc
@@ -17,8 +18,12 @@ test_proto: test_proto.c ../main/hoval_proto.c ../main/hoval_proto.h $(REGMAP)
 test_cfg: test_cfg.c ../main/hoval_cfg.c ../main/hoval_cfg.h ../main/hoval_proto.c $(REGMAP)
 	$(CC) $(CFLAGS) -DHP_REGMAP_HEADER='"$(REGMAP)"' -o $@ test_cfg.c ../main/hoval_cfg.c ../main/hoval_proto.c regmap_tu.c
 
-test: test_proto test_cfg
+test_json: test_json.c ../main/hoval_json.c ../main/hoval_json.h ../main/hoval_cfg.c ../main/hoval_proto.c $(REGMAP)
+	$(CC) $(CFLAGS) -DHP_REGMAP_HEADER='"$(REGMAP)"' -o $@ test_json.c ../main/hoval_json.c ../main/hoval_cfg.c ../main/hoval_proto.c regmap_tu.c
+
+test: test_proto test_cfg test_json
 	./test_cfg
+	./test_json
 	./test_proto > out_c.txt
 	$(PYTHON) ref_proto.py > out_py.txt
 	@sed -n '1,/^CHK U16/p' out_c.txt > out_c_cmp.txt
@@ -26,8 +31,8 @@ test: test_proto test_cfg
 	@grep -E "^(REASM|TABLE)" out_c.txt
 
 syntax:
-	$(CC) -std=gnu11 -Wall -Wextra -fsyntax-only -I../main -Iidf_stubs ../main/hoval_can.c ../main/hoval_modbus.c ../main/hoval_cfg_nvs.c ../main/main.c
+	$(CC) -std=gnu11 -Wall -Wextra -fsyntax-only -I../main -Iidf_stubs ../main/hoval_can.c ../main/hoval_modbus.c ../main/hoval_cfg_nvs.c ../main/hoval_http.c ../main/main.c
 	@echo "SYNTAX OK (gegen idf_stubs)"
 
 clean:
-	rm -f test_proto test_cfg out_*.txt
+	rm -f test_proto test_cfg test_json out_*.txt
