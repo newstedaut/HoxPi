@@ -253,3 +253,68 @@ int hj_parse_config(const char *body, hcfg_t *c, char *err, size_t errcap)
     if (changed) *c = tmp;
     return changed;
 }
+
+/* ---- OTA ------------------------------------------------------------------------ */
+bool hj_check_ota_url(const char *url, bool allow_http, char *out, size_t cap, char *err, size_t errcap)
+{
+    if (err && errcap) err[0] = 0;
+    if (!url || !*url) { if (err) snprintf(err, errcap, "url fehlt"); return false; }
+    size_t n = strlen(url);
+    if (n >= cap) { if (err) snprintf(err, errcap, "url laenger als %u Zeichen", (unsigned)(cap - 1)); return false; }
+    const char *host;
+    if (!strncmp(url, "https://", 8))     host = url + 8;
+    else if (!strncmp(url, "http://", 7)) {
+        if (!allow_http) { if (err) snprintf(err, errcap, "nur https:// erlaubt (HOXPI_OTA_ALLOW_HTTP fuer http://)"); return false; }
+        host = url + 7;
+    } else { if (err) snprintf(err, errcap, "url muss mit https:// beginnen"); return false; }
+    if (!*host || *host == '/' || *host == ':') { if (err) snprintf(err, errcap, "url ohne Host"); return false; }
+    for (const char *p = url; *p; p++) {
+        unsigned char c = (unsigned char)*p;
+        if (c <= 0x20 || c >= 0x7F || c == '"' || c == '\\' || c == '\'' || c == '<' || c == '>') {
+            if (err) snprintf(err, errcap, "url enthaelt unzulaessiges Zeichen an Position %u", (unsigned)(p - url));
+            return false;
+        }
+    }
+    memcpy(out, url, n + 1);
+    return true;
+}
+
+bool hj_parse_ota(const char *body, char *url, size_t cap, char *err, size_t errcap)
+{
+    if (err && errcap) err[0] = 0;
+    if (cap) url[0] = 0;
+    if (!body) { if (err) snprintf(err, errcap, "leerer Body"); return false; }
+    const char *v = find_key(body, "url");
+    if (!v) { if (err) snprintf(err, errcap, "Schluessel url fehlt"); return false; }
+    if (*v != '"') { if (err) snprintf(err, errcap, "url: Zeichenkette erwartet"); return false; }
+    const char *e = strchr(v + 1, '"');
+    if (!e) { if (err) snprintf(err, errcap, "url: Zeichenkette nicht geschlossen"); return false; }
+    size_t len = (size_t)(e - v - 1);
+    if (len >= cap) { if (err) snprintf(err, errcap, "url laenger als %u Zeichen", (unsigned)(cap - 1)); return false; }
+    memcpy(url, v + 1, len); url[len] = 0;
+    return true;
+}
+
+size_t hj_ota_json(char *out, size_t cap, const hota_info_t *i)
+{
+    static const char *ST[] = { "idle", "running", "ok", "failed" };
+    jw_t w = { out, cap, 0 };
+    if (cap) out[0] = 0;
+    jw_raw(&w, "{\"enabled\":"); jw_bool(&w, i->enabled);
+    jw_raw(&w, ",\"running\":");  jw_str(&w, i->running ? i->running : "?");
+    jw_raw(&w, ",\"boot\":");     jw_str(&w, i->boot ? i->boot : "?");
+    jw_raw(&w, ",\"app_version\":"); jw_str(&w, i->app_version ? i->app_version : "");
+    jw_raw(&w, ",\"app_date\":");    jw_str(&w, i->app_date ? i->app_date : "");
+    jw_raw(&w, ",\"pending_verify\":"); jw_bool(&w, i->pending_verify);
+    jw_raw(&w, ",\"state\":"); jw_str(&w, (unsigned)i->state < 4 ? ST[i->state] : "?");
+    if (i->url[0]) {
+        jw_raw(&w, ",\"url\":"); jw_str(&w, i->url);
+        jw_fmt(&w, ",\"bytes\":%lu,\"total\":", (unsigned long)i->bytes);
+        if (i->total >= 0) jw_fmt(&w, "%ld", (long)i->total); else jw_raw(&w, "null");
+        jw_fmt(&w, ",\"started_s\":%lu,\"finished_s\":", (unsigned long)i->started_s);
+        if (i->finished_s) jw_fmt(&w, "%lu", (unsigned long)i->finished_s); else jw_raw(&w, "null");
+    }
+    jw_raw(&w, ",\"error\":"); jw_str(&w, i->error ? i->error : "");
+    jw_raw(&w, "}");
+    return w.len;
+}

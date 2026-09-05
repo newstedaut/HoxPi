@@ -37,7 +37,7 @@ test: test_proto test_cfg test_json test_ha
 	@grep -E "^(REASM|TABLE)" out_c.txt
 
 syntax:
-	$(CC) -std=gnu11 -Wall -Wextra -fsyntax-only -I../main -Iidf_stubs ../main/hoval_can.c ../main/hoval_modbus.c ../main/hoval_cfg_nvs.c ../main/hoval_http.c ../main/hoval_mqtt.c ../main/main.c
+	$(CC) -std=gnu11 -Wall -Wextra -fsyntax-only -I../main -Iidf_stubs ../main/hoval_can.c ../main/hoval_modbus.c ../main/hoval_cfg_nvs.c ../main/hoval_http.c ../main/hoval_mqtt.c ../main/hoval_ota.c ../main/main.c
 	@echo "SYNTAX OK (gegen idf_stubs)"
 
 clean:

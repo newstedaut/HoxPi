@@ -14,6 +14,7 @@
 #include <stddef.h>
 #include <stdbool.h>
 #include "hoval_cfg.h"
+#include "hoval_ota.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -65,6 +66,16 @@ bool   hj_register_json(char *out, size_t cap, uint16_t reg, hj_read_cb_t read);
  * Rueckgabe: Bitmaske HCFG_SRC_* der geaenderten Werte (0 = kein bekannter Schluessel),
  * -1 bei Fehler (err erklaert; Konfiguration dann unveraendert). */
 int    hj_parse_config(const char *body, hcfg_t *c, char *err, size_t errcap);
+
+/* ---- OTA (hoval_ota.c) ---- */
+/* URL pruefen und nach out kopieren: Schema https:// (http:// nur mit allow_http), Host vorhanden,
+ * nur druckbare ASCII ohne Leerzeichen/Anfuehrungszeichen, Laenge < cap. false + err sonst. */
+bool   hj_check_ota_url(const char *url, bool allow_http, char *out, size_t cap, char *err, size_t errcap);
+/* POST-Body von /ota: {"url":"https://..."} -> url (Rohtext, noch ungeprueft; Pruefung macht hj_check_ota_url).
+ * false + err wenn der Schluessel fehlt oder keine Zeichenkette ist. */
+bool   hj_parse_ota(const char *body, char *url, size_t cap, char *err, size_t errcap);
+/* Zustand fuer GET /ota (und die Antwort auf POST /ota) */
+size_t hj_ota_json(char *out, size_t cap, const hota_info_t *i);
 
 #ifdef __cplusplus
 }

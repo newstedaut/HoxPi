@@ -93,6 +93,43 @@ menu "HoxPi Gateway"
         range 1 1440
         default 10
 
+    config HOXPI_OTA_ENABLE
+        bool "Firmware-Update per HTTP(S) erlauben (POST /ota, X-Token)"
+        default y
+        help
+            esp_https_ota in die inaktive OTA-Partition (partitions.csv: ota_0/ota_1), danach Neustart.
+            Rollback: das neue Image gilt erst als gut, wenn es einen CAN-Datenpunkt dekodiert hat
+            (HOXPI_OTA_VALID_AFTER_S); sonst startet der Bootloader die vorige Firmware.
+            Braucht CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE (sdkconfig.defaults).
+
+    config HOXPI_OTA_ALLOW_HTTP
+        bool "auch http:// (unverschluesselt) als Update-Quelle zulassen"
+        depends on HOXPI_OTA_ENABLE
+        default n
+        help
+            Nur im eigenen LAN (z. B. Image vom HoxPi/Raspberry per python3 -m http.server). Das Image
+            selbst wird von der IDF auf Magic/Groesse/SHA geprueft, nicht auf Herkunft.
+
+    config HOXPI_OTA_CERT_BUNDLE
+        bool "https: Zertifikate ueber das IDF-Wurzelzertifikat-Buendel pruefen"
+        depends on HOXPI_OTA_ENABLE
+        default y
+        help
+            esp_crt_bundle_attach (CONFIG_MBEDTLS_CERTIFICATE_BUNDLE). Aus = https ohne Zertifikatpruefung
+            ist NICHT vorgesehen; fuer eigene CAs cert_pem in hoval_ota.c eintragen.
+
+    config HOXPI_OTA_VALID_AFTER_S
+        int "Rollback, wenn das neue Image nach n Sekunden keinen CAN-Datenpunkt dekodiert hat"
+        depends on HOXPI_OTA_ENABLE
+        range 60 3600
+        default 600
+
+    config HOXPI_OTA_TIMEOUT_MS
+        int "HTTP-Timeout beim Laden des Images (ms)"
+        depends on HOXPI_OTA_ENABLE
+        range 1000 120000
+        default 15000
+
     config HOXPI_ENABLE_WRITE
         bool "Schreibpfad Modbus -> CAN freigeben (Whitelist, min/max, Kalt-Cache-Schutz)"
         default n

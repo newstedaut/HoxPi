@@ -10,6 +10,7 @@
 #include "hoval_can.h"
 #include "hoval_modbus.h"
 #include "hoval_mqtt.h"
+#include "hoval_ota.h"
 #include <string.h>
 #include <stdlib.h>
 #include "esp_log.h"
@@ -31,7 +32,7 @@
 #define CONFIG_HOXPI_MODBUS_PORT 502
 #endif
 
-#define HH_VERSION   "esp32-0.5"
+#define HH_VERSION   "esp32-0.6"
 #define HH_BODY_MAX  (HCFG_WL_TEXT_MAX + 256)   /* laengster sinnvoller /config-Body */
 #define HH_OUT_MAX   4096                        /* /status mit voller Whitelist (128 Eintraege) < 3 KB */
 
@@ -89,7 +90,8 @@ static const char INDEX_HTML[] =
 ".warn{color:#b00}.ok{color:#080}</style>"
 "<h1>HoxPi-ESP32 Gateway</h1><p id=s>lade /status …</p><table id=t></table>"
 "<p>Konfiguration: <code>GET /config</code>, aendern: <code>POST /config</code> mit Header <code>X-Token</code>"
-" (Body z.&nbsp;B. <code>{\"poll_wez\":60,\"whitelist\":\"1490,1497\"}</code>). Register: <code>/register?reg=1501</code>.</p>"
+" (Body z.&nbsp;B. <code>{\"poll_wez\":60,\"whitelist\":\"1490,1497\"}</code>). Register: <code>/register?reg=1501</code>."
+" Firmware: <code>POST /ota</code> mit <code>{\"url\":\"https://…/hoxpi_esp32.bin\"}</code>, Zustand <code>GET /ota</code>.</p>"
 "<script>"
 "const N={1501:'Betriebsmodus',1534:'Fehlercode (255=ok, 0=kein Wert)',1477:'Aussen °C',1525:'WP-Vorlauf °C',1535:'WP-Ruecklauf °C',"
 "1500:'WW Ist °C',1499:'WW Soll °C',1537:'Modulation %',25611:'Pel kW',27490:'COP'};"
@@ -103,6 +105,7 @@ static const char INDEX_HTML[] =
 "Tabelle ${j.table.registers} Register in ${j.table.areas} Bereichen<br>"
 "MQTT ${!j.mqtt.enabled?'aus':`<span class='${j.mqtt.connected?'ok':'warn'}'>${j.mqtt.connected?'verbunden':'GETRENNT'}</span>, "
 "publiziert ${j.mqtt.pub_ok} (Fehler ${j.mqtt.pub_fail}), Kommandos ${j.mqtt.cmd_ok} ok / ${j.mqtt.cmd_rej} abgelehnt`}`;"
+"fetch('/ota').then(r=>r.json()).then(o=>{document.getElementById('s').innerHTML+=`<br>Firmware ${o.app_version} (${o.app_date}) auf ${o.running}${o.pending_verify?' <span class=warn>NEU – wartet auf CAN-Bestaetigung</span>':''}, OTA ${o.enabled?'an':'aus'}, letztes Update: ${o.state}${o.error?' – '+o.error:''}`}).catch(()=>{});"
 "let h='';for(const r in j.values){const v=j.values[r];h+=`<tr><td>${r}</td><td>${N[r]||''}</td><td>${f(v.val,v.dec)}</td><td>${v.seen?'':'<span class=warn>nie gelesen</span>'}</td></tr>`}"
 "document.getElementById('t').innerHTML=h}).catch(e=>{document.getElementById('s').textContent='Fehler: '+e})"
 "</script>";
@@ -211,6 +214,38 @@ static esp_err_t h_restart(httpd_req_t *req)
     return r;
 }
 
+static esp_err_t send_ota(httpd_req_t *req, const char *status)
+{
+    hota_info_t i; hota_info(&i);
+    char out[600];
+    size_t n = hj_ota_json(out, sizeof out, &i);
+    return n < sizeof out ? send_json(req, status, out) : send_error(req, "500 Internal Server Error", "Antwort zu lang");
+}
+
+static esp_err_t h_ota_get(httpd_req_t *req) { return send_ota(req, "200 OK"); }
+
+static esp_err_t h_ota_post(httpd_req_t *req)
+{
+    if (!check_token(req)) return ESP_OK;
+    if (req->content_len == 0 || req->content_len > 512) return send_error(req, "400 Bad Request", "Body fehlt oder zu lang");
+    char body[513];
+    size_t got = 0;
+    while (got < req->content_len) {
+        int r = httpd_req_recv(req, body + got, req->content_len - got);
+        if (r <= 0) return send_error(req, "400 Bad Request", "Body unvollstaendig");
+        got += (size_t)r;
+    }
+    body[got] = 0;
+    char url[HOTA_URL_MAX], err[120];
+    if (!hj_parse_ota(body, url, sizeof url, err, sizeof err)) return send_error(req, "400 Bad Request", err);
+    if (!hota_start(url, err, sizeof err)) {
+        bool busy = strstr(err, "bereits") != NULL;
+        return send_error(req, busy ? "409 Conflict" : "400 Bad Request", err);
+    }
+    ESP_LOGW(TAG, "Firmware-Update per HTTP angestossen: %s", url);
+    return send_ota(req, "202 Accepted");
+}
+
 static esp_err_t h_register(httpd_req_t *req)
 {
     char q[32], v[8];
@@ -228,7 +263,7 @@ bool hh_start(bool modbus_write_effective)
     s_write_effective = modbus_write_effective;
     httpd_config_t cfg = HTTPD_DEFAULT_CONFIG();
     cfg.server_port = CONFIG_HOXPI_HTTP_PORT;
-    cfg.max_uri_handlers = 8;
+    cfg.max_uri_handlers = 12;
     cfg.lru_purge_enable = true;
     if (httpd_start(&s_srv, &cfg) != ESP_OK) { ESP_LOGE(TAG, "httpd_start :%d fehlgeschlagen", CONFIG_HOXPI_HTTP_PORT); return false; }
     const httpd_uri_t routes[] = {
@@ -238,10 +273,12 @@ bool hh_start(bool modbus_write_effective)
         { .uri = "/config",       .method = HTTP_POST, .handler = h_config_post },
         { .uri = "/config/reset", .method = HTTP_POST, .handler = h_config_reset },
         { .uri = "/restart",      .method = HTTP_POST, .handler = h_restart },
+        { .uri = "/ota",          .method = HTTP_GET,  .handler = h_ota_get },
+        { .uri = "/ota",          .method = HTTP_POST, .handler = h_ota_post },
         { .uri = "/register",     .method = HTTP_GET,  .handler = h_register },
     };
     for (size_t i = 0; i < sizeof routes / sizeof routes[0]; i++) httpd_register_uri_handler(s_srv, &routes[i]);
-    ESP_LOGI(TAG, "Statusseite http://<ip>:%d/  (/status, /config, /register?reg=N; POST %s)",
+    ESP_LOGI(TAG, "Statusseite http://<ip>:%d/  (/status, /config, /register?reg=N, /ota; POST %s)",
              CONFIG_HOXPI_HTTP_PORT, CONFIG_HOXPI_HTTP_TOKEN[0] ? "mit X-Token" : "GESPERRT - HOXPI_HTTP_TOKEN leer");
     return true;
 }

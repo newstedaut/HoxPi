@@ -1,7 +1,7 @@
 /*
  * test_json.c — Host-Test fuer hoval_json.c (Statusseite): /status- und /config-JSON, /register,
  * POST-Body-Zerlegung (Zahlen, true/false, Whitelist als Text/Liste, Fehlerfaelle, Grenzen),
- * Abschneide-Erkennung. Ohne ESP-IDF (gcc). Die JSON-Ausgabe wird zusaetzlich mit Python
+ * Abschneide-Erkennung, OTA (URL-Pruefung, /ota-Body, /ota-JSON). Ohne ESP-IDF (gcc). Die JSON-Ausgabe wird zusaetzlich mit Python
  * (json.loads) gegengeprueft, wenn `python3` vorhanden ist — siehe Makefile-Ziel test.
  */
 #include <stdio.h>
@@ -11,6 +11,7 @@
 #include "hoval_json.h"
 #include "hoval_cfg.h"
 #include "hoval_proto.h"
+#include "hoval_ota.h"
 
 /* Register-Attrappe: 1501 = 22 gesehen, 1477 = -3,2 °C gesehen, 1534 nie gelesen, Rest wie Tabelle */
 static bool fake_read(uint16_t reg, uint16_t *word, bool *seen)
@@ -153,6 +154,60 @@ int main(void)
     assert(has(out, "\"from_nvs\":{\"poll_wez\":true,\"poll_hv\":false") && has(out, "\"whitelist\":true}"));
     assert(hp_in_whitelist(1490) && !hp_in_whitelist(1478));
     hp_whitelist_override(NULL, 0);
+
+    /* --- OTA: URL-Pruefung --- */
+    {
+        char u[HOTA_URL_MAX], err[120];
+        assert( hj_check_ota_url("https://example.org/fw/hoxpi_esp32.bin", false, u, sizeof u, err, sizeof err) && !strcmp(u, "https://example.org/fw/hoxpi_esp32.bin"));
+        assert(!hj_check_ota_url("http://192.168.1.168:8000/hoxpi_esp32.bin", false, u, sizeof u, err, sizeof err) && has(err, "https"));
+        assert( hj_check_ota_url("http://192.168.1.168:8000/hoxpi_esp32.bin", true,  u, sizeof u, err, sizeof err));
+        assert(!hj_check_ota_url("ftp://x/y.bin", true, u, sizeof u, err, sizeof err) && has(err, "https://"));
+        assert(!hj_check_ota_url("https:///y.bin", true, u, sizeof u, err, sizeof err) && has(err, "Host"));
+        assert(!hj_check_ota_url("https://", true, u, sizeof u, err, sizeof err) && has(err, "Host"));
+        assert(!hj_check_ota_url("", true, u, sizeof u, err, sizeof err) && has(err, "fehlt"));
+        assert(!hj_check_ota_url(NULL, true, u, sizeof u, err, sizeof err));
+        assert(!hj_check_ota_url("https://h/a b.bin", true, u, sizeof u, err, sizeof err) && has(err, "Position 11"));
+        assert(!hj_check_ota_url("https://h/a\"b.bin", true, u, sizeof u, err, sizeof err) && has(err, "Zeichen"));
+        assert(!hj_check_ota_url("https://h/\xc3\xa4.bin", true, u, sizeof u, err, sizeof err) && has(err, "Zeichen"));
+        char lang[HOTA_URL_MAX + 40]; memset(lang, 'a', sizeof lang - 1); lang[sizeof lang - 1] = 0; memcpy(lang, "https://", 8);
+        assert(!hj_check_ota_url(lang, true, u, sizeof u, err, sizeof err) && has(err, "laenger"));
+        char genau[HOTA_URL_MAX]; memset(genau, 'a', sizeof genau - 1); genau[sizeof genau - 1] = 0; memcpy(genau, "https://", 8);
+        assert( hj_check_ota_url(genau, true, u, sizeof u, err, sizeof err) && strlen(u) == HOTA_URL_MAX - 1);
+
+        /* --- /ota-Body --- */
+        assert( hj_parse_ota("{\"url\":\"https://h/x.bin\"}", u, sizeof u, err, sizeof err) && !strcmp(u, "https://h/x.bin"));
+        assert( hj_parse_ota("{ \"foo\" : 1 , \"url\" : \"https://h/x.bin\" }", u, sizeof u, err, sizeof err) && !strcmp(u, "https://h/x.bin"));
+        assert(!hj_parse_ota("{\"uri\":\"https://h/x.bin\"}", u, sizeof u, err, sizeof err) && has(err, "fehlt"));
+        assert(!hj_parse_ota("{\"url\":42}", u, sizeof u, err, sizeof err) && has(err, "Zeichenkette"));
+        assert(!hj_parse_ota("{\"url\":\"https://h/x.bin}", u, sizeof u, err, sizeof err) && has(err, "geschlossen"));
+        assert(!hj_parse_ota(NULL, u, sizeof u, err, sizeof err));
+        assert( hj_parse_ota("{\"url\":\"\"}", u, sizeof u, err, sizeof err) && !u[0]);      /* leer: Body ok, URL-Pruefung lehnt ab */
+        assert(!hj_check_ota_url(u, true, u, sizeof u, err, sizeof err));
+        char body[HOTA_URL_MAX + 60]; snprintf(body, sizeof body, "{\"url\":\"%s\"}", lang);
+        assert(!hj_parse_ota(body, u, sizeof u, err, sizeof err) && has(err, "laenger"));
+
+        /* --- /ota-JSON --- */
+        hota_info_t oi = { .enabled = true, .running = "ota_0", .boot = "ota_1", .app_version = "v0.6-3-gabc", .app_date = "Sep  5 2026",
+                           .pending_verify = false, .state = HOTA_OK, .bytes = 1234567, .total = 1234567, .error = "",
+                           .started_s = 100, .finished_s = 160 };
+        strcpy(oi.url, "https://h/x.bin");
+        n = hj_ota_json(out, sizeof out, &oi);
+        assert(n < sizeof out && strlen(out) == n);
+        assert(has(out, "\"enabled\":true,\"running\":\"ota_0\",\"boot\":\"ota_1\",\"app_version\":\"v0.6-3-gabc\""));
+        assert(has(out, "\"pending_verify\":false,\"state\":\"ok\",\"url\":\"https://h/x.bin\",\"bytes\":1234567,\"total\":1234567"));
+        assert(has(out, "\"started_s\":100,\"finished_s\":160,\"error\":\"\"}"));
+        write_file("out_ota.json", out);
+        hota_info_t oi2 = { .enabled = false, .running = "factory", .boot = "factory", .app_version = "", .app_date = "",
+                            .pending_verify = true, .state = HOTA_IDLE, .total = -1, .error = "" };
+        n = hj_ota_json(out, sizeof out, &oi2);
+        assert(has(out, "\"enabled\":false") && has(out, "\"pending_verify\":true,\"state\":\"idle\",\"error\":\"\"}") && !has(out, "\"url\""));
+        hota_info_t oi3 = oi; oi3.state = HOTA_FAILED; oi3.total = -1; oi3.finished_s = 0; oi3.error = "begin: ESP_ERR_HTTP_CONNECT \"x\"";
+        n = hj_ota_json(out, sizeof out, &oi3);
+        assert(has(out, "\"state\":\"failed\"") && has(out, "\"total\":null") && has(out, "\"finished_s\":null") && has(out, "\\\"x\\\""));
+        write_file("out_ota_failed.json", out);
+        assert(hj_ota_json(out, 20, &oi) > 20);                                   /* Abschneide-Erkennung */
+        printf("OTA OK (URL 13 Faelle, Body 8, JSON 3)\n");
+    }
 
     printf("JSON OK (status/config/register, 20 POST-Faelle)\n");
     return 0;
