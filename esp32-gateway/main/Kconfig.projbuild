@@ -66,6 +66,33 @@ menu "HoxPi Gateway"
             POST /restart verlangen den Header X-Token mit genau diesem Wert. Leer = nur lesen
             (wie das HoxPi-Dashboard ohne Login). Kein TLS - nur im eigenen LAN verwenden.
 
+    config HOXPI_MQTT_URI
+        string "MQTT-Broker-URI (leer = MQTT aus), z. B. mqtt://192.168.1.10:1883"
+        default ""
+        help
+            Home-Assistant-Anbindung wie mqtt/hoval_mqtt.py: Sensoren, COP, stale, Kuehl-Wartezustand und
+            fuer Whitelist-Register number/select-Entities (hoval/<key>/set -> CAN ueber denselben
+            Pruefpfad wie Modbus). Auto-Discovery unter homeassistant/<art>/hoxpi/<key>/config.
+            Achtung: dieselbe Geraetekennung "hoxpi" wie der Raspberry-HoxPi - nicht parallel betreiben.
+
+    config HOXPI_MQTT_USER
+        string "MQTT-Benutzer (leer = ohne Anmeldung)"
+        default ""
+
+    config HOXPI_MQTT_PASS
+        string "MQTT-Passwort"
+        default ""
+
+    config HOXPI_MQTT_INTERVAL_S
+        int "MQTT-Publikationsintervall (s)"
+        range 5 3600
+        default 30
+
+    config HOXPI_MQTT_STALE_MIN
+        int "MQTT stale-Alarm nach n Minuten ohne dekodierten Datenpunkt"
+        range 1 1440
+        default 10
+
     config HOXPI_ENABLE_WRITE
         bool "Schreibpfad Modbus -> CAN freigeben (Whitelist, min/max, Kalt-Cache-Schutz)"
         default n
