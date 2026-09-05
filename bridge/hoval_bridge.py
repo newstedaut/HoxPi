@@ -84,6 +84,7 @@ EXCL_MIN_INTERVAL = 2.0   # s, Throttle fuer den Partner-Null-Write
 # --- Dynamische Whitelist (Dashboard-Checkboxen, 04.07.2026) ------------------
 # whitelist.json wird vom Dashboard (Seite "Register") verwaltet; Aenderungen
 # wirken OHNE Neustart (mtime-Check). Fehlt/kaputt -> eingebaute WRITE_WHITELIST.
+ZERO_OK_REGS = {1490, 1491, 19482, 23755}   # Vorlauf-Soll Konstantanforderung: 0 = keine Anforderung
 WHITELIST_FILE = "/home/admin/hoval-bridge/whitelist.json"
 # R8 (04.09.2026): Warm-Cache - zuletzt vom CAN gesehene Registerwoerter ueberleben
 # einen Bridge-Neustart, damit Loxone nach einem Kaltstart keine 0-Werte sieht
@@ -444,7 +445,10 @@ class Bridge:
             chk = v - 65536 if (typ == "S16" and v > 32767) else v
             mn, mx = r.get("min"), r.get("max")
             if mn is not None and mx is not None and not (mn == 0 and mx == 0):
-                if not (mn <= chk <= mx):
+                # 0 = "keine Anforderung" ist fuer die Konstantanforderungs-Register gueltig (04.09.2026)
+                if chk == 0 and reg in ZERO_OK_REGS:
+                    pass
+                elif not (mn <= chk <= mx):
                     log.warning("ABGELEHNT reg %d (%s): Wert %s ausserhalb [%s..%s]",
                                 reg, r.get("name"), chk, mn, mx)
                     continue
