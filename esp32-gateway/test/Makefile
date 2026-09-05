@@ -3,6 +3,7 @@
 #                        die Frame-/Dekodier-Ausgabe mit der Python-Referenz (bridge/hoval_bridge.py);
 #                        dazu test_cfg (Laufzeit-Konfiguration: Whitelist-Text, Grenzen, Override)
 #                        und test_json (Statusseite: /status-, /config-JSON + POST-Body-Zerlegung)
+#                        und test_ha (Home-Assistant-Discovery/Zustaende/Kommandos, Referenz ref_ha.py gegen mqtt/hoval_mqtt.py)
 #   make REGMAP=../main/regmap_gen.h test    dasselbe mit der echten, generierten Tabelle
 #   make syntax          Syntaxpruefung der ESP-IDF-Module gegen Stub-Header (idf_stubs/)
 CC      ?= gcc
@@ -21,9 +22,14 @@ test_cfg: test_cfg.c ../main/hoval_cfg.c ../main/hoval_cfg.h ../main/hoval_proto
 test_json: test_json.c ../main/hoval_json.c ../main/hoval_json.h ../main/hoval_cfg.c ../main/hoval_proto.c $(REGMAP)
 	$(CC) $(CFLAGS) -DHP_REGMAP_HEADER='"$(REGMAP)"' -o $@ test_json.c ../main/hoval_json.c ../main/hoval_cfg.c ../main/hoval_proto.c regmap_tu.c
 
-test: test_proto test_cfg test_json
+test_ha: test_ha.c ../main/hoval_ha.c ../main/hoval_ha.h ../main/hoval_cfg.c ../main/hoval_proto.c $(REGMAP)
+	$(CC) $(CFLAGS) -DHP_REGMAP_HEADER='"$(REGMAP)"' -o $@ test_ha.c ../main/hoval_ha.c ../main/hoval_cfg.c ../main/hoval_proto.c regmap_tu.c
+
+test: test_proto test_cfg test_json test_ha
 	./test_cfg
 	./test_json
+	./test_ha
+	$(PYTHON) ref_ha.py ../../mqtt/hoval_mqtt.py $(if $(findstring regmap_gen,$(REGMAP)),--full,)
 	./test_proto > out_c.txt
 	$(PYTHON) ref_proto.py > out_py.txt
 	@sed -n '1,/^CHK U16/p' out_c.txt > out_c_cmp.txt
@@ -31,8 +37,8 @@ test: test_proto test_cfg test_json
 	@grep -E "^(REASM|TABLE)" out_c.txt
 
 syntax:
-	$(CC) -std=gnu11 -Wall -Wextra -fsyntax-only -I../main -Iidf_stubs ../main/hoval_can.c ../main/hoval_modbus.c ../main/hoval_cfg_nvs.c ../main/hoval_http.c ../main/main.c
+	$(CC) -std=gnu11 -Wall -Wextra -fsyntax-only -I../main -Iidf_stubs ../main/hoval_can.c ../main/hoval_modbus.c ../main/hoval_cfg_nvs.c ../main/hoval_http.c ../main/hoval_mqtt.c ../main/main.c
 	@echo "SYNTAX OK (gegen idf_stubs)"
 
 clean:
-	rm -f test_proto test_cfg test_json out_*.txt
+	rm -f test_proto test_cfg test_json test_ha out_*.txt out_*.json out_*.jsonl

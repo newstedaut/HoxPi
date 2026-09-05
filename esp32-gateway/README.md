@@ -46,7 +46,7 @@ externes Gateway der richtige Weg.
 5. Schreibpfad (SET-Frames, ARB_WRITE/ARB_HV_POLL, Whitelist, Kanal-Exklusion).
 6. PoE/Netz, Auto-Start, Watchdog. Gegen HoxPi-Werte gegenlesen (beide parallel am Bus möglich, CAN ist multi-master/lauschfähig).
 
-## Projektstruktur (ESP-IDF ≥ 5.3, Stand 02.09.2026)
+## Projektstruktur (ESP-IDF ≥ 5.3, Stand 05.09.2026)
 
 ```
 esp32-gateway/
@@ -64,7 +64,11 @@ esp32-gateway/
 │   ├── hoval_cfg_nvs.c      NVS-Anbindung dazu (Namespace „hoxpi": poll_wez, poll_hv, poll_delay, wr_en, whitelist)
 │   ├── hoval_json.[ch]      JSON der Statusseite (reines C, host-getestet): /status, /config, /register, POST-Body-Scanner
 │   ├── hoval_http.[ch]      esp_http_server :80 — Minimalseite + JSON-Routen, Konfig per POST → NVS, Token-Schutz
-│   ├── main.c               NVS → Konfig → Ethernet (RMII-PHY oder W5500/SPI per Kconfig) → IP → Modbus → CAN → HTTP → Status-Log
+│   ├── hoval_ha.[ch]        Home-Assistant-Sicht (reines C, host-getestet): Entities/Enum-Texte/Discovery-Payloads/
+│   │                        Zustands-Texte/Kommandos — Port von mqtt/hoval_mqtt.py, Referenztest ref_ha.py
+│   ├── hoval_mqtt.[ch]      esp-mqtt-Client: LWT, Discovery bei Connect + Whitelist-Änderung, Zustände alle n s,
+│   │                        hoval/<key>/set → hm_write() (gleicher Prüfpfad wie Modbus-Schreiben)
+│   ├── main.c               NVS → Konfig → Ethernet (RMII-PHY oder W5500/SPI per Kconfig) → IP → Modbus → CAN → HTTP → MQTT → Status-Log
 │   ├── Kconfig.projbuild    Board (Olimex ESP32-EVB / Waveshare S3-POE / eigenes), Pins, Poll-Defaults, Port, Schreibfreigabe
 │   ├── regmap.c             bindet regmap_gen.h (generiert, nicht im Repo) oder regmap_example.h ein
 │   └── regmap_example.h     20 allgemein bekannte Register, damit das Projekt ohne Hoval-Liste kompiliert
@@ -138,11 +142,30 @@ curl http://<ip>/status | python3 -m json.tool
 curl -H 'X-Token: geheim' -d '{"poll_wez":60,"whitelist":[1490,1497,27509]}' http://<ip>/config
 ```
 
+### MQTT / Home Assistant (`hoval_mqtt.c` + `hoval_ha.c`, nur mit `HOXPI_MQTT_URI`)
+Port von `mqtt/hoval_mqtt.py` — dieselben Topics und Entities, damit HA-Dashboards/Automationen unverändert weiterlaufen:
+
+| Topic | Inhalt |
+|-------|--------|
+| `hoval/bridge/status` | `online` / `offline` (Last Will), retain |
+| `hoval/<key>/state` (`/raw` bei Enum-Sensoren) | 25 Sensoren (Temperaturen, Leistungen, Status HK1/HK2/WW/WEZ/SmartGrid als Klartext, Fehlercode 1534 als `OK` / `kein Wert` / `B:02 Niederdruck` …, Kältekreis fg=60/fn=7 mit Sentinel-Gruppe → `unknown`), `hoval/cop/state` (31667/31668, sonst FA-COP 27490; Pel < 0,5 kW → 0), freigegebene Steuerungen |
+| `hoval/<key>/set` | Kommando von HA: `select` als Klartext (`Konstant`, `Automatik` …), `number` als Dezimalzahl (`52.5`) → Rohwert mit den Dezimalen des Registers → `hm_write()` = **derselbe Prüfpfad wie ein Modbus-Write** (Schreibfreigabe, Whitelist, Kalt-Cache, min/max, Rate-Limit, Kanal-Exklusion) |
+| `hoval/stale/state` + `/attr` | `ON`, wenn seit `HOXPI_MQTT_STALE_MIN` (10) Minuten kein Datenpunkt dekodiert wurde (bewusst ohne availability, damit HA es auch bei stehender Bridge zeigt) |
+| `hoval/kuehl_wartet/state` + `/attr` | Backlog 15c: Kühlen angefordert, wartet auf Vorlauf ≥ 19,5 °C (Phase 0–3 in `attr`) |
+| `homeassistant/<sensor\|number\|select\|binary_sensor>/hoxpi/<key>/config` | Auto-Discovery (retain), bei jedem Connect und bei Whitelist-Änderung (POST /config) erneuert; Steuerungen außerhalb der Whitelist werden mit leerem Payload entfernt |
+
+Sonderregeln wie im Python-Dienst: Rücklauf 1535 = 0 → WP-Rücklauf 31894/31895 (fn=7 dp 258), Leistungs-Sollwert
+18767 = −127,0 → `unknown`, unbekannte Enum-Werte → Zahl als Text. Register, die nie vom CAN gelesen wurden,
+werden nicht publiziert (kein „0"-Fenster nach dem Start). **Gerätekennung ist wie beim Raspberry `hoxpi`** —
+beide gleichzeitig am selben Broker würden sich die Entities streitig machen (`HA_DEVICE_ID` in `hoval_ha.h`).
+menuconfig: `HOXPI_MQTT_URI` (leer = aus), `HOXPI_MQTT_USER/PASS`, `HOXPI_MQTT_INTERVAL_S` (30), `HOXPI_MQTT_STALE_MIN` (10).
+
 ### Testen ohne Hardware
 ```bash
 cd esp32-gateway/test
 make test                                # Frames/Dekodierung gegen bridge/hoval_bridge.py (Python-Referenz) + Assertions,
-                                         # test_cfg (Konfiguration) und test_json (Statusseite: JSON + POST-Body, 20 Fälle)
+                                         # test_cfg (Konfiguration), test_json (Statusseite: JSON + POST-Body, 20 Fälle),
+                                         # test_ha (HA-Discovery/Zustände/Kommandos) + ref_ha.py gegen mqtt/hoval_mqtt.py
 make REGMAP=../main/regmap_gen.h test    # dasselbe mit der echten Tabelle
 make syntax                              # gcc -fsyntax-only der IDF-Module gegen test/idf_stubs/
 ```
@@ -151,8 +174,12 @@ Arbitration-IDs, alle Typen inkl. S16-Negativ, 32-bit-Split), Reassembly-Tests (
 Timeout/Verdrängung, Fremd-Devkey), Tabellen-Tests (Sortierung, Low-Wort-Ausschluss, Bereiche) und
 Konfig-Tests (`test_cfg.c`: Grenzen, Whitelist-Parser 14 Fälle, Validierung, Override) und
 Statusseiten-Tests (`test_json.c`: /status-, /config-, /register-JSON mit `json.loads` gegengeprüft, POST-Body
-20 Fälle inkl. Grenzen/Syntaxfehler/Überlauf/Alles-oder-nichts, Abschneide-Erkennung) grün —
-mit Beispiel- **und** echter 555er-Tabelle. `make syntax` deckt jetzt auch `hoval_http.c` ab (Stub `esp_http_server.h`). Hinweis: `test_proto` erwartet 1490 in der Whitelist
+20 Fälle inkl. Grenzen/Syntaxfehler/Überlauf/Alles-oder-nichts, Abschneide-Erkennung) und
+HA-Tests (`test_ha.c` + `ref_ha.py`: **44/44 Discovery-Payloads identisch** mit den Tabellen in `mqtt/hoval_mqtt.py` — per
+`ast` gelesen, ohne paho —, 23 Zustandsfälle: Dezimalen, Enum, Fehlercode, Kältekreis-Sentinel, Rücklauf-Fallback, −127,
+COP-Fallback/Startfilter/Plausibilität, Kühl-Phasen; Kommandos select/number mit Rundung, S16-Wrap, Whitelist-Gate) grün —
+mit Beispiel- **und** echter 555er-Tabelle. `make syntax` deckt auch `hoval_http.c` und `hoval_mqtt.c` ab (Stubs
+`esp_http_server.h`, `mqtt_client.h`). Hinweis: `test_proto` erwartet 1490 in der Whitelist
 (HoxPi-Standardliste); eine eigene `whitelist.json` ohne 1490 lässt diese Assertion anschlagen.
 
 ## Status / Ehrlichkeit
@@ -170,7 +197,11 @@ mit Beispiel- **und** echter 555er-Tabelle. `make syntax` deckt jetzt auch `hova
   `httpd_register_uri_handler`, `httpd_req_recv`, `httpd_req_get_hdr_value_str`, `httpd_query_key_value`); die
   JSON-Logik selbst ist host-getestet. Whitelist-Änderungen per POST greifen ohne Sperre in die vom Modbus-Task
   gelesene Liste (u16-Array + Länge, statisch) — für ein einzelnes Gateway hinnehmbar, notfalls Neustart.
-- Offen für die nächsten Schritte: MQTT/HA-Discovery wie bei HoxPi, OTA.
+- **MQTT ist nur gegen den Stub geprüft** (`esp-mqtt`-Aufrufe nach IDF-5.3-API: `esp_mqtt_client_init` mit
+  `broker.address.uri` / `credentials.*` / `session.last_will`, `register_event`, `publish`, `subscribe`); Topics,
+  Payloads und Kommando-Zerlegung sind host-getestet. Kommandos werden im esp-mqtt-Task verarbeitet (nur Flag/CAN-Queue,
+  keine langen Aktionen); fragmentierte Nachrichten (`current_data_offset` ≠ 0) werden ignoriert — Kommandos sind < 48 B.
+- Offen für die nächsten Schritte: OTA.
 
 ## Historie
 - 01.09.2026 Firmware-Groundwork (dieses README).
@@ -180,3 +211,5 @@ mit Beispiel- **und** echter 555er-Tabelle. `make syntax` deckt jetzt auch `hova
   Schreibfreigabe und Whitelist ohne Neubau; `tools/gen_esp32_nvs.py` (whitelist.json → NVS-CSV); `test_cfg.c`.
 - 05.09.2026 Statusseite (`hoval_http.[ch]`, `hoval_json.[ch]`): `/`, `/status`, `/config` (GET/POST → NVS, live),
   `/config/reset`, `/restart`, `/register?reg=N`; Token-Schutz `HOXPI_HTTP_TOKEN`; `test_json.c` (20 POST-Fälle).
+- 05.09.2026 MQTT/Home Assistant (`hoval_ha.[ch]`, `hoval_mqtt.[ch]`): Port von `mqtt/hoval_mqtt.py` (Topics, Discovery,
+  Enum-Texte, Sonderregeln, Kommandos → `hm_write()`); `test_ha.c` + `ref_ha.py` (44/44 Payloads gegen die Python-Tabellen).

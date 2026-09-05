@@ -115,6 +115,15 @@ static bool handle_write(uint16_t reg, uint16_t word, uint32_t now)
     return true;
 }
 
+bool hm_write(uint16_t reg, uint16_t word)
+{
+    uint16_t off; int a = area_of(reg, &off);
+    if (a < 0 || !s_buf[a]) return false;
+    if (!handle_write(reg, word, now_ms())) return false;
+    s_buf[a][off] = word; s_shadow[a][off] = word;      /* wie ein akzeptierter Modbus-Write */
+    return true;
+}
+
 /* Ereignis-Task: auf Schreibzugriffe warten, geaenderte Woerter gegen den Schatten finden */
 static void mb_task(void *arg)
 {
