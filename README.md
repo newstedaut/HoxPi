@@ -73,6 +73,8 @@ The installer asks to download the **official Hoval datapoint list** (xlsx) from
 > **Auto-update:** `tools/update_datapoints.py --check|--apply [--restart]` downloads the current list, regenerates both JSON files when it changed (with backups and a sanity check) and can restart the bridge. Optional monthly timer: `systemd/hoval-datapoints-update.{service,timer}` — so the register map keeps itself up to date, e.g. after a Hoval service visit updated the controller firmware.
 >
 > **Sharing new datapoints:** the discovery scanner logs every CAN datapoint that answers a GET. `tools/discovery_export.py --stats` shows which of them are *not* in Hoval's list; with a curated `tools/discovery_names.json` (template: `discovery_names.example.json`, only entries with `"verified": true`) it writes a ready-to-commit CSV for [hoval_datapoints](https://github.com/newstedaut/hoval_datapoints)`/community_additions`. `--all-new` also lists unnamed finds, marked UNVERIFIED.
+>
+> **Error structure capture (dp 29042-29046):** Hoval's "active error 1-5" datapoints answer with a 16-byte record, but the Modbus list maps all 9 fields to the same raw value. `tools/fehler_catcher.py` (admin cron, read-only, no sudo) watches 1534/1540/1565... every minute and, on any change, records 45 s of `candump`, reassembles the multi-frame answers and writes them next to the Modbus values (`~/fehler_catch/`). `--test` forces a baseline capture. Field offsets will be derived from the first real event.
 
 ## Security notes
 
@@ -171,6 +173,8 @@ Der Installer fragt nach der **offiziellen Hoval-Datenpunktliste** (xlsx) von ho
 > **Auto-Update:** `tools/update_datapoints.py --check|--apply [--restart]` laedt die aktuelle Liste, erzeugt bei Aenderung beide JSONs neu (mit Backup + Sanity-Check) und kann die Bridge neu starten. Optionaler Monats-Timer: `systemd/hoval-datapoints-update.{service,timer}` — so haelt sich die Registerkarte selbst aktuell, z. B. nachdem der Hoval-Service die Regler-Firmware aktualisiert hat.
 >
 > **Neue Datenpunkte teilen:** der Discovery-Scanner protokolliert jeden CAN-Datenpunkt, der auf ein GET antwortet. `tools/discovery_export.py --stats` zeigt, welche davon *nicht* in Hovals Liste stehen; mit einer kuratierten `tools/discovery_names.json` (Vorlage `discovery_names.example.json`, nur Eintraege mit `"verified": true`) erzeugt es eine commit-fertige CSV fuer [hoval_datapoints](https://github.com/newstedaut/hoval_datapoints)`/community_additions`. `--all-new` listet auch unbenannte Funde, als UNVERIFIED markiert.
+>
+> **Fehlerstruktur mitschneiden (dp 29042-29046):** Hovals "Aktiver Fehler 1-5" antworten mit einem 16-Byte-Datensatz, die Modbus-Liste bildet aber alle 9 Felder auf denselben Rohwert ab. `tools/fehler_catcher.py` (admin-Cron, rein lesend, kein sudo) prueft minuetlich 1534/1540/1565... und schneidet bei jeder Aenderung 45 s `candump` mit, setzt die Multiframe-Antworten zusammen und legt sie neben die Modbus-Werte (`~/fehler_catch/`). `--test` erzwingt einen Basis-Mitschnitt. Die Feldoffsets kommen aus dem ersten echten Ereignis.
 
 ## Sicherheit
 
