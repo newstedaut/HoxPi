@@ -4,7 +4,7 @@
  * Ablauf: NVS/Netif/Event-Loop -> Laufzeit-Konfiguration (hoval_cfg: Kconfig-Defaults, NVS-Namespace "hoxpi"
  *         ueberschreibt Poll-Intervalle/Schreibfreigabe/Whitelist) -> Ethernet (RMII-PHY oder W5500-SPI, je Kconfig)
  *         -> auf IP warten -> Modbus-Slave (hoval_modbus.c) -> CAN (hoval_can.c) -> Statusseite (hoval_http.c :80)
- *         -> MQTT/Home Assistant (hoval_mqtt.c, nur mit HOXPI_MQTT_URI)
+ *         -> MQTT/Home Assistant (hoval_mqtt.c, nur mit HOXPI_MQTT_URI) -> OTA-Rollback-Wache (hoval_ota.c)
  *         -> Status-Task (Log alle 60 s).
  * Noch NICHT auf Hardware getestet (02.09.2026, kein Board). Pins in Kconfig.projbuild je Board.
  */
@@ -30,6 +30,7 @@
 #include "hoval_cfg.h"
 #include "hoval_http.h"
 #include "hoval_mqtt.h"
+#include "hoval_ota.h"
 
 static const char *TAG = "hoxpi";
 static EventGroupHandle_t s_ev;
@@ -126,6 +127,7 @@ void app_main(void)
     esp_err_t r = nvs_flash_init();
     if (r == ESP_ERR_NVS_NO_FREE_PAGES || r == ESP_ERR_NVS_NEW_VERSION_FOUND) { ESP_ERROR_CHECK(nvs_flash_erase()); r = nvs_flash_init(); }
     ESP_ERROR_CHECK(r);
+    hota_log_boot();
 
     /* Laufzeit-Konfiguration: Kconfig-Defaults, dann NVS drueber, dann Whitelist einhaengen */
     hcfg_defaults(hcfg_mut(), CONFIG_HOXPI_POLL_INTERVAL_S, CONFIG_HOXPI_POLL_HV_INTERVAL_S,
@@ -152,6 +154,7 @@ void app_main(void)
     if (!hc_start(hm_store))                          { ESP_LOGE(TAG, "CAN-Start fehlgeschlagen - Neustart in 10 s");    vTaskDelay(pdMS_TO_TICKS(10000)); esp_restart(); }
     if (!hh_start(hcfg_get()->enable_write))         ESP_LOGW(TAG, "Statusseite nicht gestartet (Gateway laeuft ohne HTTP weiter)");
     if (hmq_enabled() && !hmq_start())               ESP_LOGW(TAG, "MQTT nicht gestartet (Gateway laeuft ohne MQTT weiter)");
+    hota_watch();                                    /* nur nach einem Update aktiv: bestaetigt das Image beim ersten CAN-Datenpunkt */
     xTaskCreate(status_task, "hoxpi_status", 3072, NULL, 2, NULL);
     ESP_LOGI(TAG, "bereit: Loxone kann Modbus-TCP :%d lesen (Templates wie HoxPi)", CONFIG_HOXPI_MODBUS_PORT);
 }

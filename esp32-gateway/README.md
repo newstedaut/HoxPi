@@ -50,7 +50,7 @@ externes Gateway der richtige Weg.
 
 ```
 esp32-gateway/
-├── CMakeLists.txt, sdkconfig.defaults
+├── CMakeLists.txt, sdkconfig.defaults, partitions.csv (4 MB: nvs, otadata, ota_0/ota_1 à 1,9 MB)
 ├── main/
 │   ├── hoval_proto.[ch]     Protokoll, reine C-Bibliothek: GET/SET-Frames, Reassembly (Einzel-/Mehrfachframe,
 │   │                        CRC), Dekodierung U8/S8/U16/S16/U32/S32/LIST, 32-bit → 2 Modbus-Wörter,
@@ -68,7 +68,9 @@ esp32-gateway/
 │   │                        Zustands-Texte/Kommandos — Port von mqtt/hoval_mqtt.py, Referenztest ref_ha.py
 │   ├── hoval_mqtt.[ch]      esp-mqtt-Client: LWT, Discovery bei Connect + Whitelist-Änderung, Zustände alle n s,
 │   │                        hoval/<key>/set → hm_write() (gleicher Prüfpfad wie Modbus-Schreiben)
-│   ├── main.c               NVS → Konfig → Ethernet (RMII-PHY oder W5500/SPI per Kconfig) → IP → Modbus → CAN → HTTP → MQTT → Status-Log
+│   ├── hoval_ota.[ch]       Firmware-Update per esp_https_ota (POST /ota → inaktive OTA-Partition → Neustart) + Rollback-Wache:
+│   │                        neues Image gilt erst mit dem ersten dekodierten CAN-Datenpunkt, sonst zurück zur vorigen Firmware
+│   ├── main.c               NVS → Konfig → Ethernet (RMII-PHY oder W5500/SPI per Kconfig) → IP → Modbus → CAN → HTTP → MQTT → OTA-Wache → Status-Log
 │   ├── Kconfig.projbuild    Board (Olimex ESP32-EVB / Waveshare S3-POE / eigenes), Pins, Poll-Defaults, Port, Schreibfreigabe
 │   ├── regmap.c             bindet regmap_gen.h (generiert, nicht im Repo) oder regmap_example.h ein
 │   └── regmap_example.h     20 allgemein bekannte Register, damit das Projekt ohne Hoval-Liste kompiliert
@@ -133,6 +135,8 @@ Gegenstück zum HoxPi-Dashboard, bewusst klein (eine statische HTML-Seite, JSON-
 | `POST /config`         | Body `{"poll_wez":60,"poll_hv":5,"poll_delay":100,"wr_en":1,"whitelist":"1490,1497"}` (Whitelist auch als `[1490,1497]`, leer = nichts schreibbar). Alles-oder-nichts-Prüfung (Grenzen wie NVS), dann **live** anwenden (Poll-Werte/Whitelist sofort; `wr_en` erst nach Neustart → `restart_required`) und im NVS sichern; Antwort = neue Konfig |
 | `POST /config/reset`   | NVS-Namespace löschen → nächster Start mit Kompilat-Defaults |
 | `POST /restart`        | Neustart |
+| `GET /ota`             | Firmware-Zustand: `running`/`boot` (Partition), `app_version`/`app_date` (aus dem Image), `pending_verify` (neues Image, noch unbestätigt), `state` (`idle`/`running`/`ok`/`failed`) + `url`/`bytes`/`total`/`error` des letzten Versuchs |
+| `POST /ota`            | Body `{"url":"https://host/hoxpi_esp32.bin"}` → Update in die inaktive OTA-Partition (esp_https_ota, Projektname muss passen), Antwort `202` mit dem Zustand; `409` wenn schon eines läuft. Nach dem Neustart bestätigt die Rollback-Wache das Image beim ersten dekodierten CAN-Datenpunkt; bleibt der binnen `HOXPI_OTA_VALID_AFTER_S` (600 s) aus, startet der Bootloader die vorige Firmware. `http://` nur mit `HOXPI_OTA_ALLOW_HTTP` (LAN, z. B. `python3 -m http.server` auf dem HoxPi) |
 | `GET /register?reg=N`  | Tabellenzeile (unit/fg/fn/dp/Typ/dec/min/max/writable/whitelist) + Rohwort/S16-Wert + `seen` |
 
 Alle `POST`-Routen verlangen den Header `X-Token: <HOXPI_HTTP_TOKEN>` (menuconfig). **Leeres Token (Default) = POST
@@ -140,6 +144,8 @@ gesperrt (403)** — wie das HoxPi-Dashboard, das ohne Login nur liest. Beispiel
 ```bash
 curl http://<ip>/status | python3 -m json.tool
 curl -H 'X-Token: geheim' -d '{"poll_wez":60,"whitelist":[1490,1497,27509]}' http://<ip>/config
+curl -H 'X-Token: geheim' -d '{"url":"http://192.168.1.50:8000/hoxpi_esp32.bin"}' http://<ip>/ota   # HOXPI_OTA_ALLOW_HTTP=y
+curl http://<ip>/ota                                                                              # Fortschritt / Ergebnis
 ```
 
 ### MQTT / Home Assistant (`hoval_mqtt.c` + `hoval_ha.c`, nur mit `HOXPI_MQTT_URI`)
@@ -201,7 +207,12 @@ mit Beispiel- **und** echter 555er-Tabelle. `make syntax` deckt auch `hoval_http
   `broker.address.uri` / `credentials.*` / `session.last_will`, `register_event`, `publish`, `subscribe`); Topics,
   Payloads und Kommando-Zerlegung sind host-getestet. Kommandos werden im esp-mqtt-Task verarbeitet (nur Flag/CAN-Queue,
   keine langen Aktionen); fragmentierte Nachrichten (`current_data_offset` ≠ 0) werden ignoriert — Kommandos sind < 48 B.
-- Offen für die nächsten Schritte: OTA.
+- **OTA ist nur gegen den Stub geprüft** (`esp_https_ota_begin/perform/finish`, `esp_https_ota_get_img_desc`, `esp_ota_get_state_partition`,
+  `esp_ota_mark_app_valid_cancel_rollback`, `esp_ota_mark_app_invalid_rollback_and_reboot` nach IDF-5.3-API); URL-Prüfung, Body und JSON
+  sind host-getestet. `partitions.csv` ist für 4 MB Flash (Olimex EVB) ausgelegt — für 16-MB-Boards (Waveshare S3) `ota_0/ota_1`
+  vergrößern. Rollback braucht `CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y` (sdkconfig.defaults); ohne dieses Flag bleibt `pending_verify`
+  immer `false` und die Wache tut nichts. Bewusst kein Update aus dem MQTT-Kommandopfad — nur `POST /ota` mit Token.
+- Offen ohne Board: nichts mehr — der Rest ist `idf.py build` + Hardware.
 
 ## Historie
 - 01.09.2026 Firmware-Groundwork (dieses README).
@@ -214,3 +225,5 @@ mit Beispiel- **und** echter 555er-Tabelle. `make syntax` deckt auch `hoval_http
 - 05.09.2026 MQTT/Home Assistant (`hoval_ha.[ch]`, `hoval_mqtt.[ch]`): Port von `mqtt/hoval_mqtt.py` (Topics, Discovery,
   Enum-Texte, Sonderregeln, Kommandos → `hm_write()`); `test_ha.c` + `ref_ha.py` (44/44 Payloads gegen die Python-Tabellen).
 - 05.09.2026 `/status` + Startseite zeigen die MQTT-Zähler (`mqtt.connected/pub_ok/pub_fail/cmd_ok/cmd_rej`, Version esp32-0.5).
+- 05.09.2026 OTA (`hoval_ota.[ch]`): `POST /ota` (esp_https_ota, Token, Projektnamen-Check), `GET /ota`, Rollback-Wache „CAN dekodiert = gültig",
+  `partitions.csv` (ota_0/ota_1), Kconfig `HOXPI_OTA_*`; `test_json.c` um URL-/Body-/JSON-Fälle erweitert; Version esp32-0.6.

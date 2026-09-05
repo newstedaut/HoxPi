@@ -7,3 +7,4 @@ typedef int esp_err_t;
 #define ESP_ERR_NVS_NOT_FOUND 0x1102
 void abort(void);
 #define ESP_ERROR_CHECK(x) do { if ((x) != ESP_OK) abort(); } while (0)
+const char *esp_err_to_name(esp_err_t e);

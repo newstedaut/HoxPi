@@ -9,7 +9,7 @@ else()
 endif()
 
 idf_component_register(
-    SRCS "main.c" "hoval_proto.c" "hoval_can.c" "hoval_modbus.c" "hoval_cfg.c" "hoval_cfg_nvs.c" "hoval_json.c" "hoval_http.c" "hoval_ha.c" "hoval_mqtt.c" "regmap.c"
+    SRCS "main.c" "hoval_proto.c" "hoval_can.c" "hoval_modbus.c" "hoval_cfg.c" "hoval_cfg_nvs.c" "hoval_json.c" "hoval_http.c" "hoval_ha.c" "hoval_mqtt.c" "hoval_ota.c" "regmap.c"
     INCLUDE_DIRS "."
-    REQUIRES driver esp_eth esp_netif esp_event nvs_flash esp_timer esp_http_server mqtt esp-modbus)
+    REQUIRES driver esp_eth esp_netif esp_event nvs_flash esp_timer esp_http_server mqtt esp-modbus app_update esp_https_ota esp_http_client mbedtls)
 target_compile_definitions(${COMPONENT_LIB} PRIVATE HP_REGMAP_HEADER="${HOXPI_REGMAP}")
