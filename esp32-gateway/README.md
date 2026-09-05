@@ -62,7 +62,9 @@ esp32-gateway/
 │   ├── hoval_cfg.[ch]       Laufzeit-Konfiguration (reines C): Poll-Intervalle, Schreibfreigabe, Whitelist-Text
 │   │                        ↔ Liste, Grenzen, Validierung gegen die Tabelle, Override der kompilierten Whitelist
 │   ├── hoval_cfg_nvs.c      NVS-Anbindung dazu (Namespace „hoxpi": poll_wez, poll_hv, poll_delay, wr_en, whitelist)
-│   ├── main.c               NVS → Konfig → Ethernet (RMII-PHY oder W5500/SPI per Kconfig) → IP → Modbus → CAN → Status-Log
+│   ├── hoval_json.[ch]      JSON der Statusseite (reines C, host-getestet): /status, /config, /register, POST-Body-Scanner
+│   ├── hoval_http.[ch]      esp_http_server :80 — Minimalseite + JSON-Routen, Konfig per POST → NVS, Token-Schutz
+│   ├── main.c               NVS → Konfig → Ethernet (RMII-PHY oder W5500/SPI per Kconfig) → IP → Modbus → CAN → HTTP → Status-Log
 │   ├── Kconfig.projbuild    Board (Olimex ESP32-EVB / Waveshare S3-POE / eigenes), Pins, Poll-Defaults, Port, Schreibfreigabe
 │   ├── regmap.c             bindet regmap_gen.h (generiert, nicht im Repo) oder regmap_example.h ein
 │   └── regmap_example.h     20 allgemein bekannte Register, damit das Projekt ohne Hoval-Liste kompiliert
@@ -114,20 +116,43 @@ esptool.py -p /dev/ttyUSB0 write_flash 0x9000 nvs.bin     # Offset/Größe der n
 ```
 `-r registers.json` prüft die Whitelist vorab gegen die Tabelle. Nur angegebene Schlüssel landen in der CSV
 (z. B. nur `--poll-wez 60` → Whitelist bleibt Kompilat). `idf.py erase-flash` löscht alles → Kompilat-Defaults.
-`hcfg_nvs_save()`/`hcfg_nvs_reset()` stehen für die geplante Statusseite/Konsole bereit.
+`hcfg_nvs_save()`/`hcfg_nvs_reset()` bedienen die Statusseite (unten).
+
+### Statusseite / Konfiguration per HTTP (`hoval_http.c`, Port `HOXPI_HTTP_PORT` = 80)
+Gegenstück zum HoxPi-Dashboard, bewusst klein (eine statische HTML-Seite, JSON-Routen, kein TLS → nur LAN):
+
+| Route                  | Bedeutung |
+|------------------------|-----------|
+| `GET /`                | Minimalseite: Laufzeit, CAN-Zähler, stale-Warnung, Modbus/Whitelist/Poll, Kernwerte (1501, 1534, 1477, 1525, 1535, 1500, 1499, 1537, 25611, 27490) |
+| `GET /status`          | dasselbe als JSON (`can.stale` = > 10 min kein Datenpunkt, `values.<reg>.seen` = Kalt-Cache-Schutz-Bit, `config.restart_required`) |
+| `GET /config`          | Poll-Werte, `wr_en` (NVS/Kconfig) vs. `write_effective` (beim Start übernommen), Whitelist als Liste, Herkunft je Wert (`from_nvs`) |
+| `POST /config`         | Body `{"poll_wez":60,"poll_hv":5,"poll_delay":100,"wr_en":1,"whitelist":"1490,1497"}` (Whitelist auch als `[1490,1497]`, leer = nichts schreibbar). Alles-oder-nichts-Prüfung (Grenzen wie NVS), dann **live** anwenden (Poll-Werte/Whitelist sofort; `wr_en` erst nach Neustart → `restart_required`) und im NVS sichern; Antwort = neue Konfig |
+| `POST /config/reset`   | NVS-Namespace löschen → nächster Start mit Kompilat-Defaults |
+| `POST /restart`        | Neustart |
+| `GET /register?reg=N`  | Tabellenzeile (unit/fg/fn/dp/Typ/dec/min/max/writable/whitelist) + Rohwort/S16-Wert + `seen` |
+
+Alle `POST`-Routen verlangen den Header `X-Token: <HOXPI_HTTP_TOKEN>` (menuconfig). **Leeres Token (Default) = POST
+gesperrt (403)** — wie das HoxPi-Dashboard, das ohne Login nur liest. Beispiel:
+```bash
+curl http://<ip>/status | python3 -m json.tool
+curl -H 'X-Token: geheim' -d '{"poll_wez":60,"whitelist":[1490,1497,27509]}' http://<ip>/config
+```
 
 ### Testen ohne Hardware
 ```bash
 cd esp32-gateway/test
-make test                                # Frames/Dekodierung gegen bridge/hoval_bridge.py (Python-Referenz) + Assertions
+make test                                # Frames/Dekodierung gegen bridge/hoval_bridge.py (Python-Referenz) + Assertions,
+                                         # test_cfg (Konfiguration) und test_json (Statusseite: JSON + POST-Body, 20 Fälle)
 make REGMAP=../main/regmap_gen.h test    # dasselbe mit der echten Tabelle
 make syntax                              # gcc -fsyntax-only der IDF-Module gegen test/idf_stubs/
 ```
-Stand 03.09.2026: Referenzvergleich **29/29 Zeilen identisch** mit der Python-Bridge (GET/SET-Bytes,
+Stand 05.09.2026: Referenzvergleich **29/29 Zeilen identisch** mit der Python-Bridge (GET/SET-Bytes,
 Arbitration-IDs, alle Typen inkl. S16-Negativ, 32-bit-Split), Reassembly-Tests (Einzel-, Mehrfachframe,
 Timeout/Verdrängung, Fremd-Devkey), Tabellen-Tests (Sortierung, Low-Wort-Ausschluss, Bereiche) und
-Konfig-Tests (`test_cfg.c`: Grenzen, Whitelist-Parser 14 Fälle, Validierung, Override) grün —
-mit Beispiel- **und** echter 555er-Tabelle. Hinweis: `test_proto` erwartet 1490 in der Whitelist
+Konfig-Tests (`test_cfg.c`: Grenzen, Whitelist-Parser 14 Fälle, Validierung, Override) und
+Statusseiten-Tests (`test_json.c`: /status-, /config-, /register-JSON mit `json.loads` gegengeprüft, POST-Body
+20 Fälle inkl. Grenzen/Syntaxfehler/Überlauf/Alles-oder-nichts, Abschneide-Erkennung) grün —
+mit Beispiel- **und** echter 555er-Tabelle. `make syntax` deckt jetzt auch `hoval_http.c` ab (Stub `esp_http_server.h`). Hinweis: `test_proto` erwartet 1490 in der Whitelist
 (HoxPi-Standardliste); eine eigene `whitelist.json` ohne 1490 lässt diese Assertion anschlagen.
 
 ## Status / Ehrlichkeit
@@ -141,8 +166,11 @@ mit Beispiel- **und** echter 555er-Tabelle. Hinweis: `test_proto` erwartet 1490 
   `idf_component.yml` pinnt deshalb `^1.0.15`.
 - **NVS-Konfiguration ist nur gegen Stub-Header geprüft** (`nvs_open/get/set`-Aufrufe nach IDF-5.x-API);
   der erste `idf.py build` und ein Start-Log mit „Konfig: …" bestätigen sie.
-- Offen für die nächsten Schritte: Web-Status-/Konfigseite (`/status` JSON wie HoxPi-Bridge :8809, Whitelist
-  per HTTP → `hcfg_nvs_save()`), MQTT/HA-Discovery wie bei HoxPi, OTA.
+- **HTTP-Statusseite ist nur gegen den Stub geprüft** (`esp_http_server`-Aufrufe nach IDF-5.x-API: `httpd_start`,
+  `httpd_register_uri_handler`, `httpd_req_recv`, `httpd_req_get_hdr_value_str`, `httpd_query_key_value`); die
+  JSON-Logik selbst ist host-getestet. Whitelist-Änderungen per POST greifen ohne Sperre in die vom Modbus-Task
+  gelesene Liste (u16-Array + Länge, statisch) — für ein einzelnes Gateway hinnehmbar, notfalls Neustart.
+- Offen für die nächsten Schritte: MQTT/HA-Discovery wie bei HoxPi, OTA.
 
 ## Historie
 - 01.09.2026 Firmware-Groundwork (dieses README).
@@ -150,3 +178,5 @@ mit Beispiel- **und** echter 555er-Tabelle. Hinweis: `test_proto` erwartet 1490 
   Host-Testsuite mit Python-Referenzvergleich.
 - 03.09.2026 Laufzeit-Konfiguration aus NVS (`hoval_cfg.[ch]`, `hoval_cfg_nvs.c`): Poll-Intervalle WEZ/HV/Abstand,
   Schreibfreigabe und Whitelist ohne Neubau; `tools/gen_esp32_nvs.py` (whitelist.json → NVS-CSV); `test_cfg.c`.
+- 05.09.2026 Statusseite (`hoval_http.[ch]`, `hoval_json.[ch]`): `/`, `/status`, `/config` (GET/POST → NVS, live),
+  `/config/reset`, `/restart`, `/register?reg=N`; Token-Schutz `HOXPI_HTTP_TOKEN`; `test_json.c` (20 POST-Fälle).

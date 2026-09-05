@@ -54,6 +54,18 @@ menu "HoxPi Gateway"
         int "Modbus-TCP Port"
         default 502
 
+    config HOXPI_HTTP_PORT
+        int "HTTP-Port der Statusseite (/, /status, /config, /register)"
+        default 80
+
+    config HOXPI_HTTP_TOKEN
+        string "Token fuer schreibende HTTP-Aufrufe (Header X-Token); leer = POST gesperrt"
+        default ""
+        help
+            POST /config (Poll-Werte, Schreibfreigabe, Whitelist -> NVS), POST /config/reset und
+            POST /restart verlangen den Header X-Token mit genau diesem Wert. Leer = nur lesen
+            (wie das HoxPi-Dashboard ohne Login). Kein TLS - nur im eigenen LAN verwenden.
+
     config HOXPI_ENABLE_WRITE
         bool "Schreibpfad Modbus -> CAN freigeben (Whitelist, min/max, Kalt-Cache-Schutz)"
         default n

@@ -3,7 +3,8 @@
  *
  * Ablauf: NVS/Netif/Event-Loop -> Laufzeit-Konfiguration (hoval_cfg: Kconfig-Defaults, NVS-Namespace "hoxpi"
  *         ueberschreibt Poll-Intervalle/Schreibfreigabe/Whitelist) -> Ethernet (RMII-PHY oder W5500-SPI, je Kconfig)
- *         -> auf IP warten -> Modbus-Slave (hoval_modbus.c) -> CAN (hoval_can.c) -> Status-Task (Log alle 60 s).
+ *         -> auf IP warten -> Modbus-Slave (hoval_modbus.c) -> CAN (hoval_can.c) -> Statusseite (hoval_http.c :80)
+ *         -> Status-Task (Log alle 60 s).
  * Noch NICHT auf Hardware getestet (02.09.2026, kein Board). Pins in Kconfig.projbuild je Board.
  */
 #include <string.h>
@@ -26,6 +27,7 @@
 #include "hoval_can.h"
 #include "hoval_modbus.h"
 #include "hoval_cfg.h"
+#include "hoval_http.h"
 
 static const char *TAG = "hoxpi";
 static EventGroupHandle_t s_ev;
@@ -146,6 +148,7 @@ void app_main(void)
 
     if (!hm_start(netif, hcfg_get()->enable_write)) { ESP_LOGE(TAG, "Modbus-Start fehlgeschlagen - Neustart in 10 s"); vTaskDelay(pdMS_TO_TICKS(10000)); esp_restart(); }
     if (!hc_start(hm_store))                          { ESP_LOGE(TAG, "CAN-Start fehlgeschlagen - Neustart in 10 s");    vTaskDelay(pdMS_TO_TICKS(10000)); esp_restart(); }
+    if (!hh_start(hcfg_get()->enable_write))         ESP_LOGW(TAG, "Statusseite nicht gestartet (Gateway laeuft ohne HTTP weiter)");
     xTaskCreate(status_task, "hoxpi_status", 3072, NULL, 2, NULL);
     ESP_LOGI(TAG, "bereit: Loxone kann Modbus-TCP :%d lesen (Templates wie HoxPi)", CONFIG_HOXPI_MODBUS_PORT);
 }
