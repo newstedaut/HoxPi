@@ -39,6 +39,7 @@ R16 = {
  "hoval_kwl_luftqualitaet_regelung": (23630, 1, False),
  "hoval_kwl_status_regelung": (23631, 1, False),
  "hoval_kwl_wartung_konfig": (28934, 1, False),
+ "hoval_arbeitszahl": (27467, 0.1, False),   # dp23008 Gesamt-Arbeitszahl (Loop 06.09.2026)
  "hoval_fa_cop": (27490, 0.1, False),
  "hoval_quelle_vl_c": (27491, 0.1, True),
  "hoval_quelle_rl_c": (27492, 0.1, True),
@@ -72,6 +73,7 @@ R32 = {
  "hoval_waerme_kuehlen_mwh": (27486, 0.001),
  "hoval_waerme_ww_mwh": (27488, 0.001),
  "hoval_schaltzyklen": (1518, 1),
+ "hoval_betriebsstunden_gesamt_h": (1507, 1),      # dp2081 Betriebsstunden WEZ gesamt (Loop 06.09.2026)
  # --- fg=60/fn=7 Hydraulik + Laufzeitzaehler (Backlog #8, 02.09.2026) ---
  "hoval_betriebsstunden_heizen_h": (31711, 0.1),   # dp1033, Skala 0,1 h
  "hoval_betriebsstunden_kuehlen_h": (31713, 0.1),  # dp1034 (Hovals Name an 31663 ist falsch)
@@ -97,6 +99,13 @@ KK16 = {
  "hoval_kk_drehzahl_pct": (31921, 0.1, False),     # dp1282 Verdichter-Istdrehzahl 0,1 % (R7b, wahrscheinlich)
 }
 COUNTER32 = ("mwh", "zyklen", "betriebsstunden")
+# Loop 06.09.2026: Zaehler duerfen nie zurueckspringen. Belegt im fulllog: 31711/31712 lieferte
+# 30.07.-31.08. konstant 6553,7 h (= high 1 / low 1 = Bridge-Artefakt, kein Zaehlerstand) und
+# faellt gelegentlich auf 0,0/0,1 -- das erzeugt in Grafana falsche rate()-Spitzen. Wir merken
+# uns je Metrik den hoechsten je gesehenen Rohwert und geben nie einen kleineren aus.
+# Abschaltbar mit {"counter_monoton": {"enabled": false}} in hoxpi-features.json
+# (noetig z. B. nach einem echten Zaehler-Reset, etwa bei Verdichtertausch).
+_CNT_MAX = {}
 HELP = {
  "hoval_hc1_status": "0=Aus 1..3=Heizen 9..11=Kuehlen 12=Stoerung 26=SmartGrid",
  "hoval_wp_detailstatus": "Register 18723 FA-Status = WEZ-Statuscode wie hoval_wez_status (0/1/2/4/16/17/51/98), seit 03.09.2026 Faktor 1",
@@ -128,6 +137,11 @@ HELP = {
  "hoval_kwl_luftqualitaet_regelung": "HomeVent Luftqualitaetsregelung (dp 39600, 0=AUS)",
  "hoval_kwl_temp_aussenluft_c": "HomeVent Aussenlufttemperatur (fg 50 dp 0) - Fuehler im Geraet, nicht der Anlagenaussenfuehler AF1",
  "hoval_sg_status": "0=Normal 1=Vorzug 2=Gesperrt 3=Abnahmezwang",
+ "hoval_arbeitszahl": "Gesamt-Arbeitszahl der WP seit Inbetriebnahme (Regler-dp 23008, U8 x0,1); Gegenprobe aus den Zaehlern: (waerme_heizen+_kuehlen+_ww)/energie_el",
+ "hoval_betriebsstunden_gesamt_h": "Betriebsstunden Waermeerzeuger gesamt (dp 2081); liegt systematisch ueber der Summe Heizen+Kuehlen+WW - die Differenz (rund 1 %) ist Abtauung/Sonderbetrieb",
+ "hoval_waerme_gesamt_mwh": "Summe der drei Waermezaehler heizen+kuehlen+ww (nur wenn alle drei gelesen wurden)",
+ "hoval_arbeitszahl_gerechnet": "aus den Zaehlern gerechnete Arbeitszahl = waerme_gesamt / energie_el; unabhaengige Gegenprobe zu hoval_arbeitszahl",
+ "hoval_takt_minuten_pro_start": "mittlere Verdichterlaufzeit je Start ueber die Lebensdauer = betriebsstunden_gesamt*60/schaltzyklen (kurzfristige Taktung zeigt Grafanas rate())",
  "hoxpi_cache_stale": "R8b: Registerwoerter, die nach dem Bridge-Neustart noch aus dem Warm-Cache stammen (vom CAN noch nicht bestaetigt); 0 = alles live",
  "hoxpi_cache_loaded": "R8b: beim Bridge-Start aus cache_last.json vorbelegte Registerwoerter",
  "hoxpi_can_registers_seen": "R8b: Register, die seit dem Bridge-Start mindestens einmal vom CAN dekodiert wurden",
@@ -165,6 +179,9 @@ def rd(addr, words=1):
 def metrics():
     out = []
     import json as _j
+    _c32 = {}
+    try: _mono = _j.load(open("/home/admin/hoxpi-features.json")).get("counter_monoton",{}).get("enabled",True)
+    except Exception: _mono = True
     try: _copf = _j.load(open("/home/admin/hoxpi-features.json")).get("cop_filter",{}).get("enabled",True)
     except Exception: _copf = True
     # COP-Startfilter: dp 45 liefert in den ersten ~25 s eines Laufs Unsinn (Pel ~0) -> COP = 0, solange Pel < 0,5 kW
@@ -256,9 +273,37 @@ def metrics():
         if _copf and name == "hoval_cop" and not (0 <= v*sc <= 20): continue  # COP-Plausibilitaet
         if name == "hoval_cop" and not _cop_ok: v = 0  # COP-Startfilter
         typ = "counter" if any(k in name for k in COUNTER32) else "gauge"
+        if typ == "counter" and _mono:
+            _prev = _CNT_MAX.get(name)
+            if v <= 0 and _prev:            # 0 = kein Wert, nie als Zaehlerstand ausgeben
+                v = _prev
+            elif _prev is not None and v < _prev:
+                v = _prev                   # Rueckfall (Bridge-Artefakt) unterdruecken
+            else:
+                _CNT_MAX[name] = v
+            _c32[name] = v * sc
         if name in HELP: out.append(f"# HELP {name} {HELP[name]}")
         out.append(f"# TYPE {name} {typ}")
         out.append(f"{name} {round(v*sc, 4)}")
+    # Loop 06.09.2026 (Feld 5): abgeleitete Kennzahlen aus den Zaehlern
+    try:
+        _wg = [_c32.get(k) for k in ("hoval_waerme_heizen_mwh", "hoval_waerme_kuehlen_mwh", "hoval_waerme_ww_mwh")]
+        _el = _c32.get("hoval_energie_el_mwh")
+        _bh = _c32.get("hoval_betriebsstunden_gesamt_h")
+        _zy = _c32.get("hoval_schaltzyklen")
+        _abl = {}
+        if all(x is not None for x in _wg):
+            _abl["hoval_waerme_gesamt_mwh"] = round(sum(_wg), 3)
+            if _el and _el > 0:
+                _abl["hoval_arbeitszahl_gerechnet"] = round(sum(_wg) / _el, 3)
+        if _bh and _zy and _zy > 0:
+            _abl["hoval_takt_minuten_pro_start"] = round(_bh * 60.0 / _zy, 1)
+        for _m, _v in _abl.items():
+            if _m in HELP: out.append(f"# HELP {_m} {HELP[_m]}")
+            out.append(f"# TYPE {_m} gauge")
+            out.append(f"{_m} {_v}")
+    except Exception:
+        pass
     # R8b (05.09.2026): Warm-Cache-Zustand der Bridge aus bridge_state.json (alle 15 s geschrieben)
     try:
         import os as _o, time as _t
