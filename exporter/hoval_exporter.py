@@ -27,6 +27,18 @@ R16 = {
  "hoval_kwl_temp_abluft_c": (23633, 0.1, True),
  "hoval_kwl_luefter_pct": (23634, 1, False),
  "hoval_kwl_co2_pct": (28940, 1, False),
+ # --- KWL/HomeVent erweitert (Loop 06.09.2026, Feld 5): HV-Register aus registers.json ---
+ "hoval_kwl_voc_abluft_pct": (23628, 1, False),
+ "hoval_kwl_voc_aussenluft_pct": (23629, 1, False),
+ "hoval_kwl_temp_aussenluft_c": (23632, 0.1, True),
+ "hoval_kwl_modulation_pct": (23625, 1, False),
+ "hoval_kwl_modulation_normal_pct": (23623, 1, False),
+ "hoval_kwl_modulation_eco_pct": (23624, 1, False),
+ "hoval_kwl_feuchte_soll_pct": (23626, 1, False),
+ "hoval_kwl_betriebswahl": (23622, 1, False),
+ "hoval_kwl_luftqualitaet_regelung": (23630, 1, False),
+ "hoval_kwl_status_regelung": (23631, 1, False),
+ "hoval_kwl_wartung_konfig": (28934, 1, False),
  "hoval_fa_cop": (27490, 0.1, False),
  "hoval_quelle_vl_c": (27491, 0.1, True),
  "hoval_quelle_rl_c": (27492, 0.1, True),
@@ -49,6 +61,8 @@ INVALID16 = {
  "hoval_leistung_soll_heizen_pct": {-1270}, "hoval_leistung_soll_ww_pct": {-1270},
  "hoval_leistung_soll_kuehlen_pct": {-1270}, "hoval_leistung_soll_aktiv_pct": {-1270},
  "hoval_fa_ruecklauf_c": {0},  # 0 = kein Wert (FA antwortet nach Netz-Ein nicht)
+ # HomeVent ohne CO2-/VOC-Fuehler: der Regler liefert 255 (= kein Wert), nicht 255 %
+ "hoval_kwl_co2_pct": {255}, "hoval_kwl_voc_abluft_pct": {255}, "hoval_kwl_voc_aussenluft_pct": {255},
 }
 # name -> (highreg, scale[, signed])
 R32 = {
@@ -66,6 +80,10 @@ R32 = {
  "hoval_wp_ruecklauf_c": (31894, 0.1, True),       # dp258 WP-Ruecklauf (S32)
  "hoval_wp_pumpe_pct": (27495, 1),                 # dp271 Drehzahl WP-Umwaelzpumpe, 0xFFFFFFFF = aus -> 0
  "hoval_volumenstrom_lmin": (31707, 0.1),          # dp302 Volumenstrom gemittelt
+ # --- KWL-Zaehler (Loop 06.09.2026): high/low-Paare, Restlaufzeit ist S32 (kann negativ = ueberfaellig werden)
+ "hoval_kwl_wartung_rest_wochen": (28937, 1, True),    # dp21058 Restlaufzeit Wartungszaehler
+ "hoval_kwl_wartung_intervall_wochen": (28935, 1),     # dp20037 Wartungsintervall
+ "hoval_kwl_reinigung_intervall_wochen": (28945, 1),   # dp41613 Reinigungsintervall Vorfilter
 }
 # --- Kaeltekreis fg=60/fn=7 (Backlog R7, 04.09.2026): 16-bit-Einzelwort in der Bridge, gegen pCO-DB 0106/0107/0108/0202/0206 geeicht.
 #     Zustandsabhaengig: antwortet der Regler nicht, liefert die Bridge fuer alle fuenf 0 -> Gruppe weglassen (kein 0-Wert publizieren).
@@ -100,6 +118,15 @@ HELP = {
  "hoval_kuehl_phase": "Kuehlen: 0 keine Anforderung, 1 angefordert + Kaeltekreisregler wartet (Ruecklauf < 19,0 C oder Vorlauf < 18,0 C), 2 Bedingung erfuellt (Ruecklauf >= 19,0 C und Vorlauf >= 18,0 C, pCO-Timer 15 min laeuft), 3 Kuehlen aktiv (WEZ-Status != 0)",
  "hoval_kuehl_wartet": "1 = Kuehlen angefordert, Verdichter steht noch (Phase 1 oder 2); kein Fehler, der Regler startet erst, wenn Ruecklauf >= 19,0 C und Vorlauf >= 18,0 C 15 min lang gelten (Firmware-Kuehlregel, HV022/HV014/HKA60)",
  "hoval_ww_status": "0=Aus 1=Laden 8=Laden reduziert 12=SmartGrid",
+ "hoval_kwl_wartung_rest_wochen": "HomeVent: Restlaufzeit bis zur faelligen Wartung in Betriebswochen (Intervall hoval_kwl_wartung_intervall_wochen); < 2 = Wartung vorbereiten, negativ = ueberfaellig",
+ "hoval_kwl_wartung_intervall_wochen": "HomeVent: eingestelltes Wartungsintervall in Betriebswochen (dp 20037)",
+ "hoval_kwl_reinigung_intervall_wochen": "HomeVent: Intervall Vorfilter-Reinigung in Betriebswochen (dp 41613)",
+ "hoval_kwl_wartung_konfig": "HomeVent: Wartungsmeldung aktiv (0=AUS, 1=EIN)",
+ "hoval_kwl_betriebswahl": "HomeVent Betriebswahl Lueftung (dp 40650): 0=Standby 1=Woche1 2=Woche2 4=Konstant 5=Sparbetrieb",
+ "hoval_kwl_modulation_pct": "HomeVent Ist-Lueftungsmodulation (dp 38606); Sollwerte: hoval_kwl_modulation_normal_pct (40651) / _eco_pct (40686)",
+ "hoval_kwl_status_regelung": "HomeVent Status Lueftungsregelung (dp 39652)",
+ "hoval_kwl_luftqualitaet_regelung": "HomeVent Luftqualitaetsregelung (dp 39600, 0=AUS)",
+ "hoval_kwl_temp_aussenluft_c": "HomeVent Aussenlufttemperatur (fg 50 dp 0) - Fuehler im Geraet, nicht der Anlagenaussenfuehler AF1",
  "hoval_sg_status": "0=Normal 1=Vorzug 2=Gesperrt 3=Abnahmezwang",
  "hoxpi_cache_stale": "R8b: Registerwoerter, die nach dem Bridge-Neustart noch aus dem Warm-Cache stammen (vom CAN noch nicht bestaetigt); 0 = alles live",
  "hoxpi_cache_loaded": "R8b: beim Bridge-Start aus cache_last.json vorbelegte Registerwoerter",
