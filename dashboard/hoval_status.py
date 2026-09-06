@@ -48,17 +48,48 @@ ENUM_EN = {
  23631:{0:"Off / standby",1:"Normal operation",2:"VOC mode",3:"Humidity mode",4:"Frost protection",
         5:"CoolVet (cooling)",6:"Fault",7:"Summer humidity",8:"Switch-off stop"},
 }
-# ---------- Wartezustand „Kühlen angefordert, Kältekreisregler wartet auf Kreis-Temperatur" (Backlog #15b, korr. 17:xx) ----------
-# Befund RS485 03.09.2026 (HoxPi-Doku/RS485_Feldkarte.md 15:xx–17:xx): Der Kältekreisregler nimmt eine Kühl-Anforderung
-# erst an, wenn sein VORLAUF (Register 1525 „WEZ-Temperatur" = WP-VL 60-7-257 = pCO dp 17) ≥ 19,25 °C liegt (im 0,5-K-Raster
-# des Reglers = 19,5) und danach noch einige Minuten vergangen sind (4–14 min, Integral/Filter — genaue Regel offen). Der
-# Rücklauf 1535 ist NICHT das Kriterium (fünfter Lauf 16:43 und 3 von 4 Episoden 01./02.09. starteten bei RL 19,0).
-# Darunter passiert nichts (WEZ-Status 0, keine Pumpe, keine Sperre) — nach einem 5-min-Kühl-Kurzlauf (Kreis 11–14 °C)
-# dauert das je nach Bodenwärme 30 min bis 3 h. Kein Fehler, aber ohne Hinweis sieht es nach „ignorierter Anforderung" aus.
-KUEHL_START_MIN_VL = 19.5
+# ---------- Wartezustand „Kühlen angefordert, Kältekreisregler wartet auf Kreis-Temperatur" (Backlog #15b, korr. 06.09.2026) ----------
+# Befund Firmware-RE 06.09.2026 (HoxPi-Doku/PRIVAT_Firmware/Karten_Intelligence.md §22, Kühlregel des pCO, HV001 = 1):
+# Der Kältekreisregler klemmt jeden Kühl-Sollwert auf HV022 = 18,0 °C und gibt den Verdichter frei, wenn sein RÜCKLAUF
+# (Fühler 34 = pCO-DB 0102 = Register 1535, Fallback 31894/31895) ununterbrochen HKA60 = 15 min lang ≥ Soll + HV014 = 19,0 °C
+# liegt UND der Vorlauf (1525 „WEZ-Temperatur") ≥ 18,0 °C ist. AUS bei Vorlauf < Soll − HV013 = 14,0 °C → deshalb die
+# 5-min-Kurzläufe. 15/15 Warte-Starts 03.–05.09.2026 passen (kuehlstart_rl_check_20260906.txt); die frühere Marke
+# „Vorlauf ≥ 19,5" war nur die Folge (VL ≈ RL im Stillstand). Der 15-min-Timer wird hier aus Prometheus
+# (hoval_ruecklauf_c/hoval_vorlauf_c, 30-s-Raster) nachgerechnet — ohne Prometheus nur die Momentanbedingung.
+KUEHL_START_RL = 19.0     # Soll 18,0 (HV022-Klemme) + HV014 1,0
+KUEHL_START_VL_MIN = 18.0 # Vorlauf-Mindestbedingung
+KUEHL_TIMER_MIN = 15      # HKA60
+KUEHL_START_MIN_VL = KUEHL_START_RL  # Kompatibilität (alte Marke)
+_KW_PROM = {"t": 0.0, "seit": None}
+def _kuehl_timer_min():
+    """Minuten, seit hoval_ruecklauf_c ≥ 19,0 ∧ hoval_vorlauf_c ≥ 18,0 ununterbrochen gilt (Prometheus, 30 s), gecacht 20 s;
+    None = Prometheus nicht erreichbar / keine Daten. Berechnung: jüngste Stichprobe rückwärts bis zur ersten Verletzung."""
+    now = _time.time()
+    if now - _KW_PROM["t"] < 20: return _KW_PROM["seit"]
+    seit = None
+    try:
+        import urllib.request as _ur
+        end = int(now); start = end - 4 * 3600
+        ser = {}
+        for m in ("hoval_ruecklauf_c", "hoval_vorlauf_c"):
+            with _ur.urlopen(f"http://127.0.0.1:9090/api/v1/query_range?query={m}&start={start}&end={end}&step=30", timeout=4) as r:
+                res = json.loads(r.read()).get("data", {}).get("result", [])
+            ser[m] = [(float(t), float(v)) for t, v in (res[0]["values"] if res else [])]
+        rl, vl = ser["hoval_ruecklauf_c"], ser["hoval_vorlauf_c"]
+        if rl and len(rl) == len(vl) and now - rl[-1][0] < 120:
+            first = None
+            for (t, r), (_, v) in zip(reversed(rl), reversed(vl)):
+                if r >= KUEHL_START_RL and v >= KUEHL_START_VL_MIN: first = t
+                else: break
+            seit = (now - first) / 60.0 if first is not None else 0.0
+    except Exception:
+        seit = None
+    _KW_PROM["t"], _KW_PROM["seit"] = now, seit
+    return seit
 def kuehl_wartet(vals):
-    """-> dict(vl=float °C, erreicht=bool), wenn HK1 1501 = 22 (Kühlen extern) + UKA-Ventil 19870 = 1 + WEZ-Status 1539 = 0
-    (Anforderung steht, Verdichter aus); erreicht = Vorlauf 1525 >= KUEHL_START_MIN_VL (Startfreigabe folgt); sonst None."""
+    """-> dict(vl, rl=float °C, erreicht=bool, seit=min|None), wenn HK1 1501 = 22 (Kühlen extern) + UKA-Ventil 19870 = 1 +
+    WEZ-Status 1539 = 0 (Anforderung steht, Verdichter aus); erreicht = Rücklauf ≥ 19,0 ∧ Vorlauf ≥ 18,0 (pCO-Timer läuft);
+    seit = Minuten, seit die Bedingung ununterbrochen gilt (Prometheus); sonst None."""
     try:
         if vals.get(1539) != 0 or vals.get(1501) != 22 or vals.get(19870) != 1: return None
         _pel = vals.get(25611)  # F1 04.09.: 1539 antwortet nach Netz-Ein nicht (0) -> Verdichter laeuft, wenn Pel >= 0,5 kW
@@ -66,25 +97,43 @@ def kuehl_wartet(vals):
         vl = vals.get(1525)
         if vl is None or vl in (0xFFFF, 0x8000): return None
         vl = (vl - 65536 if vl > 32767 else vl) / 10.0
-        return {"vl": vl, "erreicht": vl >= KUEHL_START_MIN_VL}
+        rl = vals.get(1535)  # rl_fallback() ist vorher gelaufen
+        rl = None if rl in (None, 0, 0xFFFF, 0x8000) else (rl - 65536 if rl > 32767 else rl) / 10.0
+        erreicht = rl is not None and rl >= KUEHL_START_RL and vl >= KUEHL_START_VL_MIN
+        return {"vl": vl, "rl": rl, "erreicht": erreicht, "seit": _kuehl_timer_min() if erreicht else None}
     except Exception:
         return None
+def _f1(x): return f"{x:.1f}".replace(".", ",")
 def kuehl_wartet_txt(kw):
-    vl = kw["vl"]; r = f"{vl:.1f}".replace(".", ","); s = f"{KUEHL_START_MIN_VL:.1f}".replace(".", ",")
+    vl, rl, seit = kw["vl"], kw["rl"], kw.get("seit")
+    rl_de = _f1(rl) if rl is not None else "—"; rl_en = f"{rl:.1f}" if rl is not None else "—"
     if kw["erreicht"]:
-        return L(f"Kühlen angefordert – WP-Vorlauf {r} °C hat die Startmarke {s} °C erreicht; die Startfreigabe des "
-                 "Kältekreisreglers folgt erfahrungsgemäß innerhalb von 5–15 Minuten (Verdichter danach ≈ 30 s später).",
-                 f"Cooling requested – heat-pump flow {vl:.1f} °C has reached the start mark {KUEHL_START_MIN_VL:.1f} °C; "
-                 "the refrigeration controller usually releases the start within 5–15 minutes (compressor ≈ 30 s later).")
-    return L(f"Kühlen angefordert – der Kältekreisregler wartet, bis sein Vorlauf (WEZ-Temperatur) ≥ {s} °C ist (jetzt {r} °C). "
-             "Kein Fehler: mit kaltem Wasserkreis startet der Verdichter nicht; nach einem 5-min-Kühl-Kurzlauf dauert es "
-             "oft 30 min bis 3 h, bis der Fußboden das Wasser wieder erwärmt hat.",
-             f"Cooling requested – the refrigeration controller waits until its flow temperature (WEZ) is ≥ "
-             f"{KUEHL_START_MIN_VL:.1f} °C (now {vl:.1f} °C). Not a fault: the compressor does not start with a cold water "
-             "circuit; after a 5-min short cooling run this often takes 30 min to 3 h until the floor has warmed the water again.")
+        if seit is None:
+            zt_de, zt_en = "", ""
+        elif seit >= KUEHL_TIMER_MIN:
+            zt_de = f" seit {seit:.0f} min – die Freigabe ist fällig (Timer {KUEHL_TIMER_MIN} min abgelaufen, Verdichter ≈ 30 s nach der Freigabe)"
+            zt_en = f" for {seit:.0f} min – release is due (timer {KUEHL_TIMER_MIN} min elapsed, compressor ≈ 30 s after release)"
+        else:
+            zt_de = f" seit {seit:.0f}/{KUEHL_TIMER_MIN} min – Freigabe in ≈ {KUEHL_TIMER_MIN - seit:.0f} min"
+            zt_en = f" for {seit:.0f}/{KUEHL_TIMER_MIN} min – release in ≈ {KUEHL_TIMER_MIN - seit:.0f} min"
+        return L(f"Kühlen angefordert – Rücklauf {rl_de} °C ≥ {_f1(KUEHL_START_RL)} °C und Vorlauf {_f1(vl)} °C ≥ {_f1(KUEHL_START_VL_MIN)} °C"
+                 f"{zt_de}. Der Kältekreisregler gibt den Verdichter frei, sobald diese Bedingung {KUEHL_TIMER_MIN} min ununterbrochen gilt.",
+                 f"Cooling requested – return {rl_en} °C ≥ {KUEHL_START_RL:.1f} °C and flow {vl:.1f} °C ≥ {KUEHL_START_VL_MIN:.1f} °C"
+                 f"{zt_en}. The refrigeration controller releases the compressor once this condition has held for {KUEHL_TIMER_MIN} min without interruption.")
+    return L(f"Kühlen angefordert – der Kältekreisregler wartet, bis sein Rücklauf ≥ {_f1(KUEHL_START_RL)} °C (jetzt {rl_de} °C) und "
+             f"der Vorlauf ≥ {_f1(KUEHL_START_VL_MIN)} °C (jetzt {_f1(vl)} °C) sind, und startet {KUEHL_TIMER_MIN} min später. "
+             "Kein Fehler: mit kaltem Wasserkreis startet der Verdichter nicht; nach einem 5-min-Kühl-Kurzlauf (Stopp bei Vorlauf < 14 °C) "
+             "dauert es oft 30 min bis 3 h, bis der Fußboden das Wasser wieder erwärmt hat.",
+             f"Cooling requested – the refrigeration controller waits until its return is ≥ {KUEHL_START_RL:.1f} °C (now {rl_en} °C) and "
+             f"the flow ≥ {KUEHL_START_VL_MIN:.1f} °C (now {vl:.1f} °C), then starts {KUEHL_TIMER_MIN} min later. Not a fault: the "
+             "compressor does not start with a cold water circuit; after a 5-min short cooling run (stop at flow < 14 °C) this often "
+             "takes 30 min to 3 h until the floor has warmed the water again.")
 def kuehl_wartet_status(kw):
     """Zusatz für den Betriebsstatus 1539 (= 0 „Aus")."""
     if kw["erreicht"]:
+        s = kw.get("seit")
+        if s is not None:
+            return L(f" – Freigabe-Timer {min(s, KUEHL_TIMER_MIN):.0f}/{KUEHL_TIMER_MIN} min", f" – release timer {min(s, KUEHL_TIMER_MIN):.0f}/{KUEHL_TIMER_MIN} min")
         return L(" – Startfreigabe folgt", " – start release pending")
     return L(" – wartet auf Kreis-Temperatur", " – waiting for circuit temperature")
 

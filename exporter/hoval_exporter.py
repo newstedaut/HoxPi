@@ -97,8 +97,8 @@ HELP = {
  "hoval_kk_niederdruck_bar": "Kaeltekreis Niederdruck relativ 60-7-518 (pCO 0206), 0,01 bar",
  "hoval_kk_hochdruck_bar": "Kaeltekreis Hochdruck relativ 60-7-519 (pCO 0207), 0,01 bar",
  "hoval_kk_drehzahl_pct": "Verdichter-Istdrehzahl 60-7-1282 in % (= Modulation der Ausseneinheit, 0 im Stillstand)",
- "hoval_kuehl_phase": "Kuehlen: 0 keine Anforderung, 1 angefordert + Kaeltekreisregler wartet (WP-Vorlauf 1525 < 19,5 C), 2 Startmarke erreicht (Freigabe folgt), 3 Kuehlen aktiv (WEZ-Status != 0)",
- "hoval_kuehl_wartet": "1 = Kuehlen angefordert, Verdichter steht noch (Phase 1 oder 2); kein Fehler, der Regler startet erst ab WP-Vorlauf 19,5 C",
+ "hoval_kuehl_phase": "Kuehlen: 0 keine Anforderung, 1 angefordert + Kaeltekreisregler wartet (Ruecklauf < 19,0 C oder Vorlauf < 18,0 C), 2 Bedingung erfuellt (Ruecklauf >= 19,0 C und Vorlauf >= 18,0 C, pCO-Timer 15 min laeuft), 3 Kuehlen aktiv (WEZ-Status != 0)",
+ "hoval_kuehl_wartet": "1 = Kuehlen angefordert, Verdichter steht noch (Phase 1 oder 2); kein Fehler, der Regler startet erst, wenn Ruecklauf >= 19,0 C und Vorlauf >= 18,0 C 15 min lang gelten (Firmware-Kuehlregel, HV022/HV014/HKA60)",
  "hoval_ww_status": "0=Aus 1=Laden 8=Laden reduziert 12=SmartGrid",
  "hoval_sg_status": "0=Normal 1=Vorzug 2=Gesperrt 3=Abnahmezwang",
  "hoxpi_cache_stale": "R8b: Registerwoerter, die nach dem Bridge-Neustart noch aus dem Warm-Cache stammen (vom CAN noch nicht bestaetigt); 0 = alles live",
@@ -118,6 +118,7 @@ def _drop():
     try: _conn["sock"].close()
     except Exception: pass
     _conn["sock"] = None
+KUEHL_START_RL, KUEHL_START_VL_MIN = 19.0, 18.0  # kw3: Soll 18,0 (HV022) + HV014 1,0; Vorlauf-Minimum
 def rd(addr, words=1):
     # Persistente Modbus-Verbindung wiederverwenden (verhindert TIME_WAIT-Anhaeufung).
     # Bei Fehler Verbindung verwerfen und einmal neu versuchen.
@@ -168,7 +169,7 @@ def metrics():
             out.append("# TYPE hoval_fehlercode_info gauge")
             out.append('hoval_fehlercode_info{code="%s:%02d"} 1' % ("IWBE"[(c >> 6) & 3], c & 63))
     # Backlog 15c: Kuehl-Phase (Wartezustand des Kaeltekreisreglers, Kriterium wie Dashboard #15b)
-    #   0 keine Kuehlanforderung | 1 angefordert, wartet (WP-VL 1525 < 19,5) | 2 Startmarke erreicht | 3 Kuehlen aktiv
+    #   0 keine Kuehlanforderung | 1 angefordert, wartet | 2 RL >= 19,0 und VL >= 18,0 (pCO-Timer 15 min) | 3 Kuehlen aktiv
     try:
         _hk, _uka, _wez, _vl = rd(1501), rd(19870), rd(1539), rd(1525)
         _ph = None
@@ -178,7 +179,17 @@ def metrics():
             elif _uka[0] != 1: _ph = 0
             elif _vl and _vl[0] not in (0x8000, 0xFFFF):
                 _v = (_vl[0] - 65536 if _vl[0] > 32767 else _vl[0]) / 10.0
-                _ph = 2 if _v >= 19.5 else 1
+                # kw3 06.09.: pCO-Kuehlregel = Ruecklauf (1535, Fallback 31894/31895) >= 19,0 UND Vorlauf >= 18,0 fuer 15 min
+                _r = rd(1535); _rv = None
+                if _r and _r[0] not in (0, 0x8000, 0xFFFF): _rv = (_r[0] - 65536 if _r[0] > 32767 else _r[0]) / 10.0
+                else:
+                    _w2 = rd(31894, 2)
+                    if _w2 and len(_w2) >= 2:
+                        _x = (_w2[0] << 16) | _w2[1]
+                        if _x not in (0xFFFFFFFF, 0x80000000):
+                            if _x > 0x7FFFFFFF: _x -= 0x100000000
+                            if -500 <= _x <= 1500: _rv = _x / 10.0
+                _ph = 2 if (_rv is not None and _rv >= KUEHL_START_RL and _v >= KUEHL_START_VL_MIN) else 1
         if _ph is not None:
             out.append(f"# HELP hoval_kuehl_phase {HELP['hoval_kuehl_phase']}")
             out.append("# TYPE hoval_kuehl_phase gauge")
