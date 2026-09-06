@@ -199,28 +199,42 @@ def num_meta(reg):
     return lo, hi, step, unit
 
 # ---------- Backlog 15c: Wartezustand "Kuehlen angefordert, Kaeltekreisregler wartet auf Kreis-Temperatur" ----------
-# Kriterium wie Dashboard #15b: 1501 = 22 (Kuehlen extern) + 19870 = 1 (UKA offen) + 1539 = 0 (WEZ aus); Vorlauf 1525 (nicht 1535).
-KUEHL_START_MIN_VL = 19.5
-KUEHL_PHASE_TXT = {0: "keine Anforderung", 1: "wartet auf Kreis-Temperatur", 2: "Startmarke erreicht, Freigabe folgt", 3: "Kuehlen aktiv"}
+# Kriterium wie Dashboard #15b (kw3 06.09.2026, pCO-Kuehlregel aus der Firmware): 1501 = 22 (Kuehlen extern) + 19870 = 1 (UKA offen)
+# + 1539 = 0 (WEZ aus); Phase 2 = Ruecklauf 1535 (Fallback 31894/31895) >= 19,0 UND Vorlauf 1525 >= 18,0 -> pCO-Timer 15 min laeuft.
+KUEHL_START_RL, KUEHL_START_VL_MIN, KUEHL_TIMER_MIN = 19.0, 18.0, 15
+KUEHL_START_MIN_VL = KUEHL_START_RL  # Kompatibilitaet (Attribut startmarke_c)
+KUEHL_PHASE_TXT = {0: "keine Anforderung", 1: "wartet auf Kreis-Temperatur", 2: "Bedingung erfuellt, pCO-Timer 15 min laeuft", 3: "Kuehlen aktiv"}
+def _ruecklauf_c():
+    r = mb_read(1535)
+    if r and r[0] not in (0, 0x8000, 0xFFFF): return (r[0] - 65536 if r[0] > 32767 else r[0]) / 10.0
+    hl = mb_read(31894, 2)
+    if hl and len(hl) >= 2:
+        x = (hl[0] << 16) | hl[1]
+        if x not in (0xFFFFFFFF, 0x80000000):
+            if x > 0x7FFFFFFF: x -= 0x100000000
+            if -500 <= x <= 1500: return x / 10.0
+    return None
 def kuehl_phase():
-    """-> (phase, vorlauf_c) oder (None, None), wenn Register fehlen."""
+    """-> (phase, vorlauf_c, ruecklauf_c) oder (None, None, None), wenn Register fehlen."""
     hk, uka, wez, vl = mb_read(1501), mb_read(19870), mb_read(1539), mb_read(1525)
-    if not (hk and uka and wez): return None, None
+    if not (hk and uka and wez): return None, None, None
     v = None
     if vl and vl[0] not in (0x8000, 0xFFFF): v = (vl[0] - 65536 if vl[0] > 32767 else vl[0]) / 10.0
-    if hk[0] != 22: return 0, v
+    if hk[0] != 22: return 0, v, None
     _pel = mb_read(25611)  # F1 04.09.: 1539 stumm nach Netz-Ein -> Verdichter laeuft auch bei Pel >= 0,5 kW
-    if wez[0] != 0 or (_pel and _pel[0] not in (0x8000, 0xFFFF) and _pel[0] >= 50): return 3, v
-    if uka[0] != 1: return 0, v
-    if v is None: return None, None
-    return (2 if v >= KUEHL_START_MIN_VL else 1), v
+    if wez[0] != 0 or (_pel and _pel[0] not in (0x8000, 0xFFFF) and _pel[0] >= 50): return 3, v, None
+    if uka[0] != 1: return 0, v, None
+    if v is None: return None, None, None
+    r = _ruecklauf_c()
+    return (2 if (r is not None and r >= KUEHL_START_RL and v >= KUEHL_START_VL_MIN) else 1), v, r
 def publish_kuehl(c):
-    ph, v = kuehl_phase()
+    ph, v, r = kuehl_phase()
     if ph is None:
         c.publish(f"{BASE}/kuehl_wartet/state", "unknown", retain=True); return
     c.publish(f"{BASE}/kuehl_wartet/state", "ON" if ph in (1, 2) else "OFF", retain=True)
     c.publish(f"{BASE}/kuehl_wartet/attr", json.dumps({"phase": ph, "phase_txt": KUEHL_PHASE_TXT[ph],
-              "vorlauf_c": v, "startmarke_c": KUEHL_START_MIN_VL}), retain=True)
+              "vorlauf_c": v, "ruecklauf_c": r, "startmarke_c": KUEHL_START_MIN_VL, "start_rl_min_c": KUEHL_START_RL,
+              "start_vl_min_c": KUEHL_START_VL_MIN, "timer_min": KUEHL_TIMER_MIN}), retain=True)
 
 def discovery(c, wl):
     for key, reg, name, unit, dc, enum in SENSORS + [("cop", COP_HI, "COP aktuell", None, None, None)]:
