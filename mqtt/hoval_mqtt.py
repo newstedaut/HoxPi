@@ -236,6 +236,38 @@ def publish_kuehl(c):
               "vorlauf_c": v, "ruecklauf_c": r, "startmarke_c": KUEHL_START_MIN_VL, "start_rl_min_c": KUEHL_START_RL,
               "start_vl_min_c": KUEHL_START_VL_MIN, "timer_min": KUEHL_TIMER_MIN}), retain=True)
 
+# ---------- KWL-Wartungsalarm (Loop 06.09.2026, Feld 5) ----------
+# HomeVent-Wartungszaehler dp 21058 "Restlaufzeit Wartungszaehler (Betriebswochen)"
+# liegt als S32-Paar 28937 (high) / 28938 (low) in der Bridge. ZWINGEND das Paar
+# lesen: eine ueberfaellige (negative) Restlaufzeit erschiene sonst als 65 53x.
+# Schwelle ueber /home/admin/hoxpi-features.json: {"kwl_wartung": {"warn_wochen": 2}}
+KWL_REST_HI, KWL_IV_HI, KWL_REIN_HI, KWL_KONFIG = 28937, 28935, 28945, 28934
+KWL_WARN_WOCHEN = 2   # Bernhard 06.09.2026: Alarm, wenn unter 2 Betriebswochen
+def _s32(addr):
+    hl = mb_read(addr, 2)
+    if not hl or len(hl) < 2: return None
+    x = (hl[0] << 16) | hl[1]
+    if x in (0xFFFFFFFF, 0x80000000): return None
+    if x > 0x7FFFFFFF: x -= 0x100000000
+    return x
+def publish_kwl_wartung(c, warn=KWL_WARN_WOCHEN):
+    rest = _s32(KWL_REST_HI)
+    if rest is None or not (-520 <= rest <= 520):
+        c.publish(BASE + "/kwl_wartung_rest/state", "unknown", retain=True)
+        c.publish(BASE + "/kwl_wartung/state", "unknown", retain=True)
+        return
+    _stale["last_ok"] = time.time()
+    iv, rein = _s32(KWL_IV_HI), _s32(KWL_REIN_HI)
+    kf = mb_read(KWL_KONFIG)
+    aktiv = not (kf and kf[0] == 0)
+    on = bool(aktiv and rest < warn)
+    attr = {"rest_wochen": rest, "warn_wochen": warn, "intervall_wochen": iv,
+            "reinigung_intervall_wochen": rein, "wartungsmeldung_aktiv": aktiv,
+            "zustand": ("ueberfaellig" if rest < 0 else ("faellig" if on else "ok"))}
+    c.publish(BASE + "/kwl_wartung_rest/state", rest, retain=True)
+    c.publish(BASE + "/kwl_wartung/state", "ON" if on else "OFF", retain=True)
+    c.publish(BASE + "/kwl_wartung/attr", json.dumps(attr), retain=True)
+
 def discovery(c, wl):
     for key, reg, name, unit, dc, enum in SENSORS + [("cop", COP_HI, "COP aktuell", None, None, None)]:
         cfg = {"name": name, "unique_id": f"hoxpi_{key}", "state_topic": f"{BASE}/{key}/state",
@@ -252,6 +284,16 @@ def discovery(c, wl):
     c.publish("homeassistant/binary_sensor/hoxpi/kuehl_wartet/config", json.dumps({
         "name": "Kuehlen wartet auf Kreis-Temperatur", "unique_id": "hoxpi_kuehl_wartet",
         "state_topic": f"{BASE}/kuehl_wartet/state", "json_attributes_topic": f"{BASE}/kuehl_wartet/attr",
+        "availability_topic": AVAIL, "device": DEVICE}), retain=True)
+    c.publish("homeassistant/sensor/hoxpi/kwl_wartung_rest/config", json.dumps({
+        "name": "Lueftung Restlaufzeit Wartung", "unique_id": "hoxpi_kwl_wartung_rest",
+        "state_topic": f"{BASE}/kwl_wartung_rest/state", "unit_of_measurement": "Wochen",
+        "state_class": "measurement", "icon": "mdi:air-filter",
+        "availability_topic": AVAIL, "device": DEVICE}), retain=True)
+    c.publish("homeassistant/binary_sensor/hoxpi/kwl_wartung/config", json.dumps({
+        "name": "Lueftung Wartung faellig", "unique_id": "hoxpi_kwl_wartung",
+        "device_class": "problem", "state_topic": f"{BASE}/kwl_wartung/state",
+        "json_attributes_topic": f"{BASE}/kwl_wartung/attr",
         "availability_topic": AVAIL, "device": DEVICE}), retain=True)
     for key, reg, name, art, enum in CONTROLS:
         topic = f"homeassistant/{art}/hoxpi/{key}/config"
@@ -320,6 +362,8 @@ def main():
                 c.publish(f"homeassistant/{_a}/hoxpi/{_k}/config", "", retain=True)
             c.publish("homeassistant/binary_sensor/hoxpi/stale/config", "", retain=True)
             c.publish("homeassistant/binary_sensor/hoxpi/kuehl_wartet/config", "", retain=True)
+            c.publish("homeassistant/sensor/hoxpi/kwl_wartung_rest/config", "", retain=True)
+            c.publish("homeassistant/binary_sensor/hoxpi/kwl_wartung/config", "", retain=True)
             main._was_off = True
             time.sleep(INTERVAL); continue
         else:
@@ -392,6 +436,8 @@ def main():
                 pass
         try: publish_kuehl(c)  # Backlog 15c
         except Exception as e: print("publish_kuehl:", e, flush=True)
+        try: publish_kwl_wartung(c, int(_f.get("kwl_wartung", {}).get("warn_wochen", KWL_WARN_WOCHEN)))
+        except Exception as e: print("publish_kwl_wartung:", e, flush=True)
         try:
             stale_check(c, int(_f.get("mqtt_ha", {}).get("stale_min", STALE_MIN_DEFAULT)))
         except Exception as e:

@@ -5,6 +5,7 @@
  "backup":     {"enabled": true},
  "keepalive":  {"enabled": true},
  "sollzustand": {"enabled": true},
+ "kwl_wartung": {"warn_wochen": 2},
  "keepalive_dps": {
   "30046": {"enabled": true, "value": 0, "label": "Ext. constant demand heating input -> OFF"},
   "30057": {"enabled": true, "value": 0, "label": "Ext. constant demand cooling input -> OFF"},
