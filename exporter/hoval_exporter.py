@@ -87,6 +87,9 @@ R32 = {
  "hoval_kwl_wartung_intervall_wochen": (28935, 1),     # dp20037 Wartungsintervall
  "hoval_kwl_reinigung_intervall_wochen": (28945, 1),   # dp41613 Reinigungsintervall Vorfilter
 }
+# --- Hinweis zur Schreibweise "pCO xxxx": das ist NUR der Name des Adressraums im Kaelteregler
+#     (vierstellige Seiten-/Offset-Notation). Der Kaelteregler der UltraSource B ist KEIN CAREL pCO,
+#     sondern ein HAICO 31.4-S auf NXP LPC1788; nur das EEV-Modul ist ein CAREL EVD mini.
 # --- Kaeltekreis fg=60/fn=7 (Backlog R7, 04.09.2026): 16-bit-Einzelwort in der Bridge, gegen pCO-DB 0106/0107/0108/0202/0206 geeicht.
 #     Zustandsabhaengig: antwortet der Regler nicht, liefert die Bridge fuer alle fuenf 0 -> Gruppe weglassen (kein 0-Wert publizieren).
 KK16 = {

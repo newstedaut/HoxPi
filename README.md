@@ -9,6 +9,12 @@ HoxPi passively reads the CAN bus of a Hoval® TopTronic® E system (heat pump, 
 
 > **Disclaimer:** Independent open-source project, **not affiliated with Hoval AG**. Hoval® and TopTronic® are trademarks of Hoval AG. Use at your own risk — you are interfacing with your own heating system.
 
+> **Note on the refrigeration controller:** some code comments and register descriptions use the
+> notation `pCO xxxx` for refrigerant-circuit values. That is only the name of the **address space**
+> (four-digit page/offset notation) — it is **not** a statement about the hardware. The refrigeration
+> controller of the UltraSource B is a **HAICO 31.4-S (NXP LPC1788)**, not a CAREL pCO; only the
+> electronic-expansion-valve module is a CAREL (EVD mini). HoxPi never writes to that controller.
+
 ## Features
 
 - **Modbus-TCP gateway emulation** — register numbers match the official Hoval datapoint list, so the official Loxone Library templates (Heating & Cooling, Ventilation, Energy Management) work without modification

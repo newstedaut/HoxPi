@@ -157,6 +157,9 @@ def rl_fallback(vals):
         return False
 
 # ---------- Kältekreis fg=60/fn=7 (Backlog R7, 04.09.2026) ----------
+# Hinweis zur Schreibweise "pCO xxxx": das ist nur der Name des Adressraums im Kälteregler
+# (vierstellige Seiten-/Offset-Notation). Der Kälteregler der UltraSource B ist KEIN CAREL pCO,
+# sondern ein HAICO 31.4-S auf NXP LPC1788; nur das EEV-Modul ist ein CAREL EVD mini.
 # 31903 Lufteintritt / 31905 Sauggas / 31907 Heißgas (0,1 °C), 31913 Überhitzung (0,01 K), 31915 Niederdruck rel. (0,01 bar);
 # gegen die pCO-DB (RS485) geeicht. Zustandsabhängig: antwortet der Regler nicht, liefert die Bridge für alle fünf 0.
 # R7b (04.09. 16:xx): + 31917 Hochdruck rel. (0,01 bar, pCO 0207, sicher) + 31921 Verdichter-Istdrehzahl (0,1 %, wahrscheinlich)
