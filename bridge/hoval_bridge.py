@@ -69,6 +69,26 @@ WRITE_WHITELIST = {
 }
 WRITE_MIN_INTERVAL = 0.05   # s, minimales Intervall (verhindert Bus-Flut, laesst Loxone-Befehle sofort durch)
 
+# --- Fast-Lane (07.09.2026) -------------------------------------------------
+# Register, die sich schnell aendern und in Dashboard/Grafana/MQTT/Loxone als
+# "live" gelten. Sie bekommen einen eigenen Poll-Thread, weil der normale
+# WEZ-Zyklus ~60 s dauert (304 Ziele x poll_delay + poll_interval).
+FAST_REGS = [
+    18726,   # Modulation Verdichter
+    25611,   # elektrische Leistung WEZ
+    25612,   # thermische Leistung WEZ
+    18760,   # Systemvorlauf
+    1535,    # Ruecklauf
+    1500,    # Warmwasser Ist
+    1504,    # Warmwasser Status
+    1501,    # Status Heizkreis 1
+    1477,    # Aussentemperatur
+    1534,    # Fehlercode
+    18767,   # Leistungs-Sollwert (Fruehindikator)
+    19870,   # UKA-/Kuehlventil
+    31708,   # Volumenstrom
+]
+
 # --- Kanal-Exklusion Heizen/Kuehlen (relais-freier Template-Betrieb) ----------
 # Pro Heizkreis darf nur EIN Sollwert-Register != 0 sein. Schreibt Loxone den
 # einen Kanal (>0), nullt HoxPi automatisch den gepaarten anderen Kanal - so
@@ -177,6 +197,11 @@ def build_modbus(regmap, on_write):
 
 # ---- CAN-Handling -----------------------------------------------------------
 class Bridge:
+    # HP-1: ab welchem Vielfachen des gemessenen Poll-Durchlaufs ein Register als
+    # eingefroren gilt. 4 laesst einzelne verlorene Antworten durchgehen und schlaegt
+    # trotzdem lange vor den 4 Tagen an, die 25613 unbemerkt stillstand.
+    FROZEN_FACTOR = 4.0
+
     def __init__(self, args):
         self._pair_cache = {}
         self.args = args
@@ -189,7 +214,14 @@ class Bridge:
         self.err_count = 0
         self._last_write = {}
         self._pending = {}   # Mehrfach-Frame-Reassembly: (devkey,seq) -> [bytearray, remaining, timestamp]
-        self._seen_from_can = set()  # Register, die schon mind. 1x vom CAN dekodiert wurden
+        # HP-1 (12.09.2026): war eine MENGE ("jemals gesehen"). Damit galt ein Register,
+        # das der CAN nach der ersten Bestaetigung nie wieder lieferte, ewig als frisch --
+        # genau so blieben 25613/25614/27467 seit 08.09. 13:25 als Standbild unentdeckt.
+        # Jetzt ein DICT reg -> Zeitstempel der LETZTEN Bestaetigung. `in`, `len` und
+        # Iteration verhalten sich wie bei der Menge, die uebrigen Stellen bleiben gueltig.
+        self._seen_from_can = {}
+        self._sweep_s = {}           # label -> gemessene Dauer eines vollen Poll-Durchlaufs [s]
+        self._poll_regs = set()      # HP-1: alle Register, die wir aktiv POLLEN (Sollzustand)
         self._cache_regs = set()     # R8b: beim Start aus dem Warm-Cache vorbelegte Registerwoerter
         self._cache_loaded = 0
         self._cache_age = 0.0
@@ -308,13 +340,14 @@ class Bridge:
         regs = self.regmap.by_dp.get((fg, fn, dp))
         if not regs:
             return
+        now = time.time()
         for r in self._effective_rows(fg, fn, dp, regs):
             t = (r["type"] or "").upper()
             v = decode_value(t, val)
             if v is None:
                 continue
             self.dec_count += 1
-            self._seen_from_can.add(r["reg"])
+            self._seen_from_can[r["reg"]] = now   # HP-1: JEDE Bestaetigung stempeln, nicht nur die erste
             if self.block is not None:
                 self.block.set_internal(r["reg"], to_registers(t, v))
 
@@ -384,9 +417,36 @@ class Bridge:
                     return True
                 return (addr - 1) in seen and (self.regmap.by_reg.get(addr - 1, {}).get("type") or "").upper() in ("U32", "S32")
             stale = sorted(a for a in self._cache_regs if not confirmed(a))
-            st = {"ts": time.time(), "start": self._t0, "cache_loaded": self._cache_loaded,
+            now = time.time()
+            # --- HP-1: Alter je Register + Einfrier-Erkennung -------------------
+            # `stale` oben heisst weiterhin nur "aus dem Warm-Cache, seit dem Start nie
+            # bestaetigt". Das ist die ALTE, beim Start eingefrorene Frage. Neu ist
+            # `frozen`: Register, die IM LAUFENDEN BETRIEB aufgehoert haben zu antworten.
+            sweep = max(list(self._sweep_s.values()) + [float(getattr(self.args, "poll_interval", 30.0))])
+            thresh = max(self.FROZEN_FACTOR * sweep, 120.0)
+            ages = {str(a): round(now - ts, 1) for a, ts in seen.items()}
+            # Das zweite Wort eines 32-Bit-Wertes wird unter der HIGH-Adresse dekodiert
+            # und nie eigenstaendig gestempelt. Es ist aber genauso frisch. Ohne diesen
+            # Zusatz erschienen 1506 (zu 1505) und 27489 (zu 27488) faelschlich als "nie
+            # gesehen" -- dieselbe Falle, die confirmed() oben schon beruecksichtigt.
+            for a, ts in list(seen.items()):
+                if (self.regmap.by_reg.get(a, {}).get("type") or "").upper() in ("U32", "S32"):
+                    if (a + 1) in self.regmap.by_reg and str(a + 1) not in ages:
+                        ages[str(a + 1)] = round(now - ts, 1)
+            frozen = sorted(int(a) for a, age in ages.items() if age > thresh)
+            # HP-1, dritter Fall: gepollt, aber seit dem Start NIE beantwortet.
+            # Faengt die Register, die aus stale und frozen herausfallen.
+            never = sorted(a for a in self._poll_regs if str(a) not in ages)
+            st = {"ts": now, "start": self._t0, "cache_loaded": self._cache_loaded,
                   "cache_age_s": int(self._cache_age), "stale": len(stale), "stale_regs": stale[:50],
-                  "seen_can": len(seen), "rx": self.rx_count, "dec": self.dec_count, "err": self.err_count}
+                  "seen_can": len(seen), "rx": self.rx_count, "dec": self.dec_count, "err": self.err_count,
+                  # HP-1
+                  "sweep_s": {k: round(v, 1) for k, v in self._sweep_s.items()},
+                  "frozen_threshold_s": round(thresh, 1),
+                  "frozen": len(frozen), "frozen_regs": frozen[:100],
+                  "polled": len(self._poll_regs),
+                  "never": len(never), "never_regs": never[:100],
+                  "reg_age_s": ages}
             tmp = STATE_FILE + ".tmp"
             with open(tmp, "w", encoding="utf-8") as f:
                 json.dump(st, f)
@@ -433,11 +493,21 @@ class Bridge:
                 # Fehlerspeicher (24150-24194); die blieben sonst dauerhaft leer.
                 # Aufwand unkritisch: ~72 statt 13 Register = 7 s je 30-s-Zyklus.
                 hv.append((ARB_HV_POLL, r))
+        # HP-1: Sollzustand festhalten -- welche Register FRAGEN wir ueberhaupt ab?
+        # Ohne diese Menge faellt ein Register, das die Anlage ueberhaupt nicht
+        # beantwortet, nach zwei Neustarts aus JEDEM Netz: es ist dann weder `stale`
+        # (nicht mehr im Warm-Cache, weil save_cache nur Bestaetigtes sichert) noch
+        # `frozen` (nie einen Zeitstempel bekommen) -- es verschwindet einfach.
+        # Genau das passiert mit 25613/25614/27467.
+        for _arb, _r in (wez + hv):
+            for _r2 in self.regmap.by_dp.get((_r["fg"], _r["fn"], _r["dp"]), []):
+                self._poll_regs.add(_r2["reg"])
         return wez, hv
 
-    def poll_targets(self, targets, interval):
+    def poll_targets(self, targets, interval, label="poll"):
         import can
         while True:
+            t0 = time.time()
             for arb, r in targets:
                 payload = bytes([0x01, OP_GET, r["fg"] & 0xFF, r["fn"] & 0xFF,
                                  (r["dp"] >> 8) & 0xFF, r["dp"] & 0xFF])
@@ -447,6 +517,10 @@ class Bridge:
                 except Exception as e:
                     log.debug("poll-send: %s", e)
                 time.sleep(self.args.poll_delay)
+            # HP-1: gemessene Dauer eines vollen Durchlaufs inkl. Pause. Das ist das
+            # ECHTE Erwartungsintervall je Register -- NICHT --poll-interval, denn der
+            # WEZ-Sweep allein dauert ~304 x poll_delay.
+            self._sweep_s[label] = (time.time() - t0) + interval
             time.sleep(interval)
 
     # ----- Schreiben: Modbus FC6 -> CAN SET -----
@@ -550,11 +624,22 @@ class Bridge:
             log.debug("signal: %s", e)
         if not self.args.no_poll:
             wez, hv = self.build_targets()
-            log.info("Poll: %d WEZ (alle %ss) + %d Lueftung (alle 5s)",
-                     len(wez), self.args.poll_interval, len(hv))
-            threading.Thread(target=self.poll_targets, args=(wez, self.args.poll_interval), daemon=True).start()
+            fastkeys = set()
+            for _rg in FAST_REGS:
+                _rr = self.regmap.by_reg.get(_rg)
+                if _rr and _rr.get("fg") is not None and _rr.get("unit_id") == 1:
+                    fastkeys.add((_rr["fg"], _rr["fn"], _rr["dp"]))
+            fast = [(a, r) for (a, r) in wez
+                    if (r["fg"], r["fn"], r["dp"]) in fastkeys]
+            log.info("Poll: %d WEZ (alle %ss) + %d Lueftung (alle 5s) + %d Live (alle %ss)",
+                     len(wez), self.args.poll_interval, len(hv),
+                     len(fast), self.args.fast_interval)
+            threading.Thread(target=self.poll_targets, args=(wez, self.args.poll_interval, "wez"), daemon=True).start()
             if hv:
-                threading.Thread(target=self.poll_targets, args=(hv, 5.0), daemon=True).start()
+                threading.Thread(target=self.poll_targets, args=(hv, 5.0, "hv"), daemon=True).start()
+            if fast and self.args.fast_interval > 0:
+                threading.Thread(target=self.poll_targets,
+                                 args=(fast, self.args.fast_interval, "fast"), daemon=True).start()
         from pymodbus.server import StartTcpServer
         log.info("Modbus-TCP-Server auf %s:%d  (%d Register)",
                  self.args.host, self.args.port, len(self.regmap.by_reg))
@@ -568,6 +653,8 @@ def main():
     ap.add_argument("--port", type=int, default=502)
     ap.add_argument("--poll-interval", type=float, default=30.0)
     ap.add_argument("--poll-delay", type=float, default=0.1)
+    ap.add_argument("--fast-interval", type=float, default=5.0,
+                    help="Pollintervall der Live-Register (FAST_REGS); 0 = aus")
     ap.add_argument("--no-poll", action="store_true")
     ap.add_argument("--enable-write", action="store_true",
                     help="erlaubt Modbus-FC6/16 -> CAN-SET (Schreiben auf die WP). Default AUS = nur lesen.")
