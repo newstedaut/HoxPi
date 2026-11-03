@@ -149,6 +149,9 @@ HELP = {
  "hoxpi_cache_loaded": "R8b: beim Bridge-Start aus cache_last.json vorbelegte Registerwoerter",
  "hoxpi_can_registers_seen": "R8b: Register, die seit dem Bridge-Start mindestens einmal vom CAN dekodiert wurden",
  "hoxpi_bridge_uptime_seconds": "R8b: Laufzeit des Bridge-Prozesses",
+    "hoxpi_reg_polled": "R86: Anzahl der Register, die die Bridge ueberhaupt pollt",
+    "hoxpi_reg_never_count": "R86: Register, die gepollt werden, seit dem Bridge-Start aber NIE geantwortet haben",
+    "hoxpi_reg_frozen_count": "R86: Register, die geantwortet haben und dann verstummt sind (Alter > 4x Sweep)",
 }
 _tid = [0]
 _conn = {"sock": None}
@@ -315,12 +318,42 @@ def metrics():
             _st = _j.load(open(_sf))
             _vals = {"hoxpi_cache_stale": _st.get("stale"), "hoxpi_cache_loaded": _st.get("cache_loaded"),
                      "hoxpi_can_registers_seen": _st.get("seen_can"),
+                     "hoxpi_reg_polled": _st.get("polled"),
+                     "hoxpi_reg_never_count": _st.get("never"),
+                     "hoxpi_reg_frozen_count": _st.get("frozen"),
                      "hoxpi_bridge_uptime_seconds": (int(_t.time() - float(_st["start"])) if "start" in _st else None)}
             for _m, _v in _vals.items():
                 if _v is None: continue
-                out.append(f"# HELP {_m} {HELP[_m]}")
+                out.append(f"# HELP {_m} {HELP.get(_m, _m)}")
                 out.append(f"# TYPE {_m} gauge")
                 out.append(f"{_m} {int(_v)}")
+            # --- R86 (12.09.2026, Top-10 Punkt 4): Freshness je einzelnem Register ---
+            _age = _st.get("reg_age_s") or {}
+            if _age:
+                out.append("# HELP hoxpi_reg_age_seconds R86: Sekunden seit der letzten CAN-Bestaetigung dieses Registers")
+                out.append("# TYPE hoxpi_reg_age_seconds gauge")
+                for _r, _a in sorted(_age.items(), key=lambda _x: int(_x[0])):
+                    out.append('hoxpi_reg_age_seconds{reg="%s"} %s' % (_r, _a))
+            _nv = _st.get("never_regs") or []
+            out.append("# HELP hoxpi_reg_never R86: 1 = wird gepollt, hat seit dem Bridge-Start NIE geantwortet")
+            out.append("# TYPE hoxpi_reg_never gauge")
+            for _r in sorted(_nv, key=int):
+                out.append('hoxpi_reg_never{reg="%s"} 1' % _r)
+            _fz = _st.get("frozen_regs") or []
+            out.append("# HELP hoxpi_reg_frozen R86: 1 = hat geantwortet und ist dann verstummt (Alter > 4x Sweep)")
+            out.append("# TYPE hoxpi_reg_frozen gauge")
+            for _r in sorted(_fz, key=int):
+                out.append('hoxpi_reg_frozen{reg="%s"} 1' % _r)
+            _sw = _st.get("sweep_s") or {}
+            if _sw:
+                out.append("# HELP hoxpi_bridge_sweep_seconds R86: GEMESSENE Dauer eines Polldurchlaufs je Bahn")
+                out.append("# TYPE hoxpi_bridge_sweep_seconds gauge")
+                for _lane in sorted(_sw):
+                    out.append('hoxpi_bridge_sweep_seconds{lane="%s"} %s' % (_lane, _sw[_lane]))
+            if _st.get("frozen_threshold_s") is not None:
+                out.append("# HELP hoxpi_reg_frozen_threshold_seconds R86: Altersschwelle, ab der ein Register frozen heisst")
+                out.append("# TYPE hoxpi_reg_frozen_threshold_seconds gauge")
+                out.append("hoxpi_reg_frozen_threshold_seconds %s" % _st["frozen_threshold_s"])
     except Exception:
         pass
     return "\n".join(out) + "\n"

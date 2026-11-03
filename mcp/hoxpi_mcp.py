@@ -145,6 +145,51 @@ def _name(reg):
     return t.get("nd") or _regmap().get(reg, {}).get("name", "")
 
 # ---------- Tools ----------
+# --- R86 (12.09.2026): Datenfrische der von get_status benutzten Register ---
+# Quelle ist bridge_state.json, das die Bridge alle 15 s atomar schreibt (HP-1).
+#   never  = wird gepollt, hat seit dem Bridge-Start NIE geantwortet
+#   frozen = hat geantwortet und ist dann verstummt (Alter > 4x Sweep)
+_FRISCHE_REGS = {
+    1477: "aussentemperatur_c", 18760: "vorlauf_c", 1535: "ruecklauf_c",
+    1500: "warmwasser_ist_c", 1499: "warmwasser_soll_c", 1510: "raumtemperatur_c",
+    1538: "wasserdruck_bar", 25611: "leistung_elektrisch_kw", 25612: "leistung_thermisch_kw",
+    18726: "modulation_prozent", 27467: "jahresarbeitszahl", 18723: "wp_detailstatus",
+    1501: "heizkreis_1", 1502: "heizkreis_2", 1504: "warmwasser_status",
+    27537: "smart_grid", 27509: "sg_offset_ww_k", 27528: "sg_offset_raum_hk1_k",
+    19870: "kuehlventil_uka", 1534: "fehlercode",
+}
+
+def _datenfrische():
+    try:
+        import json as _js, os as _o, time as _t   # bewusst lokal: keine Annahme ueber die Importe der Datei
+        _sf = "/home/admin/hoval-bridge/bridge_state.json"
+        if not _o.path.exists(_sf) or _t.time() - _o.path.getmtime(_sf) > 180:
+            return {"bridge_zustand": "bridge_state.json fehlt oder ist veraltet",
+                    "tote_felder": None, "verstummte_felder": None}
+        _st = _js.load(open(_sf))
+        _never = set(_st.get("never_regs") or [])
+        _frozen = set(_st.get("frozen_regs") or [])
+        _age = _st.get("reg_age_s") or {}
+        tot = sorted({_FRISCHE_REGS[r]: r for r in _FRISCHE_REGS if r in _never}.items())
+        ver = sorted({_FRISCHE_REGS[r]: r for r in _FRISCHE_REGS if r in _frozen}.items())
+        alt = [(round(float(_age[str(r)]), 1), _FRISCHE_REGS[r])
+               for r in _FRISCHE_REGS if str(r) in _age]
+        alt.sort(reverse=True)
+        out = {
+            "bridge_zustand": "ok",
+            "tote_felder": [{"feld": f, "reg": r} for f, r in tot] or None,
+            "verstummte_felder": [{"feld": f, "reg": r} for f, r in ver] or None,
+            "aeltester_wert": ({"feld": alt[0][1], "alter_s": alt[0][0]} if alt else None),
+            "sweep_s": _st.get("sweep_s"),
+        }
+        if tot or ver:
+            out["warnung"] = ("Diese Felder stammen aus Registern ohne aktuelle CAN-Antwort "
+                              "und sind NICHT als Messwert zu verwenden: "
+                              + ", ".join([f for f, _ in tot + ver]))
+        return out
+    except Exception as _e:
+        return {"bridge_zustand": "nicht auswertbar: %s" % _e}
+
 @mcp.tool()
 def get_status() -> dict:
     """Kuratierter Live-Zustand der Anlage: Temperaturen, Leistung, COP,
@@ -159,11 +204,14 @@ def get_status() -> dict:
         "vorlauf_c": g(18760), "ruecklauf_c": _ruecklauf(),
         "warmwasser_ist_c": g(1500), "warmwasser_soll_c": g(1499),
         "raumtemperatur_c": g(1510),
-        "wasserdruck_bar": g(18738),
+        # 12.09.2026: 18738 antwortet nicht mehr (HP-1 "never") und lieferte 0
+        # -> Dauerfehlalarm "Wasserdruck niedrig". 1538 = selbe Groesse auf fg60/fn254,
+        # liefert 0x8000 (kein Sensor verdrahtet) -> _scaled() -> None -> Pruefung uebersprungen.
+        "wasserdruck_bar": g(1538),
         "leistung_elektrisch_kw": g(25611), "leistung_thermisch_kw": g(25612),
         "modulation_prozent": g(18726),
         "cop_aktuell": _cop_gated(),  # nur im laufenden Betrieb ungleich 0; COP-Startfilter (Pel < 0,5 kW -> 0)
-        "jahresarbeitszahl": g(27467),  # JAZ/SPF - verlässlicher Langzeit-Effizienzwert
+        "jahresarbeitszahl": (g(27467) or None),  # JAZ/SPF - verlässlicher Langzeit-Effizienzwert
         "wp_detailstatus": {"code": (hp or [None])[0] and round((hp[0]) / 10),
                             "text": ST_HP.get(hp and round(hp[0] / 10), "?") if hp else "?"},
         "heizkreis_1": {"code": hc1 and hc1[0], "text": ST_HC.get(hc1 and hc1[0], "?")},
@@ -174,6 +222,7 @@ def get_status() -> dict:
         "kuehlventil_uka": (_rd(19870) or [None])[0],
         "fehlercode": (_rd(1534) or [None])[0],
         "fehlercode_hinweis": "0 = kein Wert (FA antwortet nicht, z. B. nach Netz-Ein), 255 = OK" if ((_rd(1534) or [255])[0] == 0) else None,
+        "datenfrische": _datenfrische(),
     }
 
 def _ruecklauf():
