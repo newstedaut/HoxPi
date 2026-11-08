@@ -892,7 +892,7 @@ FLAG_EN = ('<svg viewBox="0 0 36 24" xmlns="http://www.w3.org/2000/svg" aria-hid
  '<circle cx="21.5" cy="5" r="0.7" fill="#fff"/><circle cx="24.3" cy="5" r="0.7" fill="#fff"/>'
  '<circle cx="20" cy="7.7" r="0.7" fill="#fff"/><circle cx="23" cy="7.7" r="0.7" fill="#fff"/><circle cx="25.8" cy="7.7" r="0.7" fill="#fff"/></svg>')
 
-PIPHOST_JS = ('<script>/*piphost-rewrite*/(function(){var h=location.hostname;''if(!h||h==="192.168.1.50")return;''document.querySelectorAll("main code, main .v, main pre").forEach(function(el){''if(el.textContent.indexOf("192.168.1.50")>=0)''el.textContent=el.textContent.replace(/192\\.168\\.1\\.168/g,h);});})();</script>')
+PIPHOST_JS = ('<script>/*piphost-rewrite*/(function(){var h=location.hostname;''if(!h||h==="192.168.1.50")return;''document.querySelectorAll("main code, main .v, main pre").forEach(function(el){''if(el.textContent.indexOf("192.168.1.50")>=0)''el.textContent=el.textContent.replace(/192\\.168\\.1\\.50/g,h);});})();</script>')
 
 def page(title, active, body, refresh=False, path="/"):
     rf = '<meta http-equiv=refresh content=10>' if refresh else ''
