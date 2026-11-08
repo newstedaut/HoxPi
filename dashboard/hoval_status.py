@@ -7,6 +7,12 @@ except ImportError:
     verlauf_page = lambda *a: "<p>verlauf_module.py fehlt</p>"
     _vah = lambda q: (503, b'{"error":"module missing"}', "application/json")
 from urllib.parse import urlparse, parse_qs
+try:
+    from display_module import display_page, display_api, display_set_api
+except ImportError:
+    display_page = lambda *a: "<p>display_module.py fehlt (gehoert neben hoval_status.py)</p>"
+    display_api = lambda *a: {"ok": False, "fehler": "display_module.py fehlt"}
+    display_set_api = lambda *a: {"ok": False, "fehler": "display_module.py fehlt"}
 
 REG_PATH = "/home/admin/hoval-bridge/registers.json"
 MODBUS_HOST, MODBUS_PORT = "127.0.0.1", 502
@@ -898,7 +904,7 @@ def page(title, active, body, refresh=False, path="/"):
     rf = '<meta http-equiv=refresh content=10>' if refresh else ''
     lg = curlang()
     nav = "".join(f'<a class="{ "act" if active==k else "" }" href="{u}">{t}</a>'
-                  for k,u,t in [("home","/",L("Start","Home")),("werte","/werte","Live"),
+                  for k,u,t in [("home","/",L("Start","Home")),("werte","/werte","Live"),("display","/display","Display"),
                                 ("alle","/alle",L("Alle Werte","All values")),
                                 ("register","/register",L("Register","Registers")),
                                 ("integration","/integration","Integration"),
@@ -1095,6 +1101,11 @@ class H(http.server.BaseHTTPRequestHandler):
                     self.send_header("Content-Length", str(len(data))); self.end_headers(); self.wfile.write(data); return
             self.send_response(404); self.send_header("Content-Type","text/plain; charset=utf-8"); self.end_headers()
             self.wfile.write("hoxpi_assistent.html nicht gefunden (gehoert nach /home/admin/hoval-bridge/)".encode()); return
+        if p == "/api/display":
+            data = json.dumps(display_api(q), ensure_ascii=False).encode("utf-8")
+            self.send_response(200); self.send_header("Content-Type","application/json; charset=utf-8")
+            self.send_header("Cache-Control","no-store")
+            self.send_header("Content-Length", str(len(data))); self.end_headers(); self.wfile.write(data); return
         if p == "/api/verlauf_data":
             st, body, ct = _vah(q)
             bd = body if isinstance(body, bytes) else body.encode()
@@ -1108,6 +1119,7 @@ class H(http.server.BaseHTTPRequestHandler):
         elif p in ("/integration","/loxone","/homeassistant","/anleitung"): body, rf, act = self.integration() + self.stats_section() + self.mcp_section() + self.netz_section() + self.anleitung().replace('<h1>', '<h2 class="sec" style="font-size:1.35rem;margin-top:2.2rem">', 1).replace('</h1>', '</h2>', 1), False, "integration"
         elif p == "/sicherheit": body, rf, act = self.sicherheit(), False, "sicherheit"
         elif p == "/verlauf": body, rf, act = verlauf_page(curlang()), False, "verlauf"
+        elif p == "/display": body, rf, act = display_page(curlang()), False, "display"
         else:                body, rf, act = self.home(), False, "home"
         out = page(act.title(), act, body, rf, path=p).encode("utf-8")
         self.send_response(200); self.send_header("Content-Type","text/html; charset=utf-8")
@@ -1125,6 +1137,13 @@ class H(http.server.BaseHTTPRequestHandler):
         if auth_enabled() and not self.session_ok():
             self.json_out({"ok": False, "fehler": "Nicht angemeldet - bitte auf der Seite 'Sicherheit' den 2FA-Code eingeben / Not signed in - enter your 2FA code on the 'Security' page"}, 401)
             return
+        if pr.path == "/api/display/set":
+            try:
+                cl = min(int(self.headers.get("Content-Length", 0) or 0), 4096)
+            except ValueError:
+                cl = 0
+            raw = self.rfile.read(cl) if cl > 0 else b"{}"
+            self.json_out(display_set_api(raw)); return
         if pr.path == "/api/features/apply":
             self.api_features_apply(); return
         if pr.path == "/api/watch/config":
