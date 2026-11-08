@@ -91,7 +91,8 @@ echo "OK: Python $PYV"
 # 0c) Alle Dateien da, die installiert werden? (schuetzt vor unvollstaendigem Download/Clone)
 MISSING=""
 for f in tools/gen_registers.py tools/gen_reg_texts.py bridge/hoval_bridge.py bridge/whitelist.example.json \
-         dashboard/hoval_status.py exporter/hoval_exporter.py hoxpi-features.example.json \
+         dashboard/hoval_status.py dashboard/verlauf_module.py dashboard/display_module.py \
+         exporter/hoval_exporter.py hoxpi-features.example.json \
          keepalive/hoval_keepalive.py watch/hoval_watch.py backup/hoxpi_backup.sh \
          systemd/hoval-bridge.service systemd/hoval-status.service systemd/hoval-exporter.service; do
   [ -f "$f" ] || MISSING="$MISSING $f"
@@ -180,6 +181,8 @@ run install -m 755 bridge/hoval_bridge.py /opt/hoxpi/
 if [ -f /opt/hoxpi/whitelist.json ]; then echo "  whitelist.json vorhanden - bleibt unveraendert"
 else run install -m 644 bridge/whitelist.example.json /opt/hoxpi/whitelist.json; fi
 run install -m 755 dashboard/hoval_status.py /opt/hoxpi/
+# Module der Seiten /verlauf und /display muessen neben hoval_status.py liegen
+run install -m 644 dashboard/verlauf_module.py dashboard/display_module.py /opt/hoxpi/
 run install -m 755 exporter/hoval_exporter.py /opt/hoxpi/
 [ -f assistant/hoxpi_assistent.html ] && run install -m 644 assistant/hoxpi_assistent.html /opt/hoxpi/
 # Die Skripte erwarten die Dateien unter /home/admin/hoval-bridge/ - Symlink setzen:
@@ -284,6 +287,27 @@ if ask "Grafana-Statistik installieren (ca. 150 MB)?"; then
   run install -m 644 grafana/grafana-override.conf /etc/systemd/system/grafana-server.service.d/override.conf
   run systemctl daemon-reload
   run systemctl enable --now prometheus grafana-server
+fi
+
+# ---------------------------------------------------------------------------
+# 5b) Optional: Panel-Dienst fuer die Seite /display
+# ---------------------------------------------------------------------------
+STEP="5b) Panel-Dienst"
+echo "--- 5b) Optional: Panel-Dienst (Seite /display mit eigenen Bus-Abfragen) ---"
+echo "Die Seite /display funktioniert auch ohne ihn (Werte aus der Bridge). Der Dienst startet im"
+echo "Modus 'trocken' (sendet nichts). Live-Betrieb und Schreiben erst bewusst in config.json einschalten."
+if ask "Panel-Dienst installieren (startet trocken)?"; then
+  run install -m 755 panel/hoxpi_panel.py /opt/hoxpi/
+  run install -d -o "$ADM" "$HOME_ADM/hoxpi_panel"
+  if [ -f "$HOME_ADM/hoxpi_panel/config.json" ]; then echo "  hoxpi_panel/config.json vorhanden - bleibt unveraendert"
+  else run install -m 600 -o "$ADM" panel/config.example.json "$HOME_ADM/hoxpi_panel/config.json"; fi
+  if [ "$DRY" = "1" ]; then
+    echo "  [dry-run] systemd/hoxpi-panel.service mit User=$ADM nach /etc/systemd/system/"
+  else
+    sed -e "s#__ADM__#$ADM#g" -e "s#__HOME__#$HOME_ADM#g" systemd/hoxpi-panel.service > /etc/systemd/system/hoxpi-panel.service
+  fi
+  run systemctl daemon-reload
+  run systemctl enable --now hoxpi-panel
 fi
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,14 @@
+[Unit]
+Description=HoxPi panel daemon (optional: Pi as additional operating panel on the TopTronic E CAN bus, feeds /display)
+After=can0.service hoval-bridge.service
+Wants=can0.service
+
+[Service]
+User=__ADM__
+Environment=HOXPI_PANEL_DIR=__HOME__/hoxpi_panel
+ExecStart=/usr/bin/python3 /opt/hoxpi/hoxpi_panel.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
