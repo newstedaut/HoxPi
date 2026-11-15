@@ -1072,6 +1072,12 @@ class H(http.server.BaseHTTPRequestHandler):
                 self.send_header("Content-Disposition", 'attachment; filename="' + p.strip("/") + '"')
             self.send_header("Content-Length", str(len(data)))
             self.end_headers(); self.wfile.write(data); return
+        if p == "/api/auth/check":
+            # check endpoint for a reverse proxy in front of HoxPi (e.g. Caddy forward_auth):
+            # 204 = logged in (or login disabled), otherwise redirect to the login page
+            if (not auth_enabled()) or self.session_ok():
+                self.send_response(204); self.end_headers(); return
+            self.send_response(302); self.send_header("Location", "/sicherheit"); self.end_headers(); return
         if p == "/hoxpi-ha.yaml":
             data = ha_yaml().encode("utf-8")
             self.send_response(200)
@@ -2134,5 +2140,6 @@ class Server(socketserver.ThreadingTCPServer):
     allow_reuse_address = True
     daemon_threads = True
 
-with Server(("", 80), H) as s:
+# HOXPI_HTTP_BIND / HOXPI_HTTP_PORT: optional, e.g. 127.0.0.1 / 8080 behind a reverse proxy (default: all interfaces, port 80)
+with Server((os.environ.get("HOXPI_HTTP_BIND", ""), int(os.environ.get("HOXPI_HTTP_PORT", "80"))), H) as s:
     s.serve_forever()
