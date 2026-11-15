@@ -49,7 +49,7 @@ def _whitelist():
         return set()
 
 ST_HC = {0: "Abgeschaltet", 1: "Heizen normal", 2: "Heizen Komfort", 3: "Heizen Eco",
-         4: "Frostschutz", 7: "Ferien", 8: "Party", 9: "Kühlen normal", 10: "Kühlen Komfort",
+         4: "Frostschutz", 6: "Zwangsdrosselung (WW-Vorrang)", 7: "Ferien", 8: "Party", 9: "Kühlen normal", 10: "Kühlen Komfort",
          11: "Kühlen Eco", 12: "STÖRUNG", 13: "Handbetrieb", 14: "Schutz-Kühlbetrieb",
          22: "Kühlen extern/konstant", 23: "Heizen extern/konstant", 26: "SmartGrid-Vorzug"}
 ST_DHW = {0: "Aus", 1: "Laden normal", 2: "Laden Komfort", 5: "STÖRUNG", 6: "Zapfung",
@@ -212,8 +212,8 @@ def get_status() -> dict:
         "modulation_prozent": g(18726),
         "cop_aktuell": _cop_gated(),  # nur im laufenden Betrieb ungleich 0; COP-Startfilter (Pel < 0,5 kW -> 0)
         "jahresarbeitszahl": (g(27467) or None),  # JAZ/SPF - verlässlicher Langzeit-Effizienzwert
-        "wp_detailstatus": {"code": (hp or [None])[0] and round((hp[0]) / 10),
-                            "text": ST_HP.get(hp and round(hp[0] / 10), "?") if hp else "?"},
+        "wp_detailstatus": {"code": (hp or [None])[0],
+                            "text": ST_HP.get(hp and hp[0], "?") if hp else "?"},
         "heizkreis_1": {"code": hc1 and hc1[0], "text": ST_HC.get(hc1 and hc1[0], "?")},
         "heizkreis_2": {"code": hc2 and hc2[0], "text": ST_HC.get(hc2 and hc2[0], "?")},
         "warmwasser_status": {"code": ww and ww[0], "text": ST_DHW.get(ww and ww[0], "?")},
@@ -401,6 +401,23 @@ def _verify_later(reg, value, delay=15):
     threading.Thread(target=run, daemon=True).start()
 
 
+def _bridge_ablehnung(reg, sekunden=5):
+    """F173 (12.11.2026): Hat die Bridge den letzten Schreibversuch auf reg abgelehnt?
+    Liest das Bridge-Journal der letzten Sekunden. Rueckgabe: Ablehnungsgrund als Text oder None."""
+    try:
+        import subprocess
+        out = subprocess.run(["journalctl", "-u", "hoval-bridge", "--no-pager", "-o", "cat",
+                              "--since", "-%ds" % sekunden], capture_output=True, text=True, timeout=5).stdout
+        z = [l for l in out.splitlines() if ("reg %d " % reg) in l and ("SET reg" in l or "ABGELEHNT" in l)]
+        if not z:
+            return "kein SET im Bridge-Protokoll (Schreiben kam nicht am CAN an)"
+        if "ABGELEHNT" in z[-1]:
+            return z[-1].split("ABGELEHNT", 1)[1].strip()
+        return None
+    except Exception:
+        return None
+
+
 @mcp.tool()
 def write_register(reg: int, value: int, confirm: bool = False) -> dict:
     """Rohwert in ein Register schreiben (z. B. 45.0 °C = 450 bei dec1!).
@@ -426,11 +443,14 @@ def write_register(reg: int, value: int, confirm: bool = False) -> dict:
     ok = _wr(reg, value)
     _time.sleep(1)
     sofort = read_register(reg).get("rohwert")
+    abgelehnt = _bridge_ablehnung(reg)
 
     res = {"ok": ok, "reg": reg, "name": info.get("name_de"),
            "rohwert_vorher": vorher, "geschrieben": value, "rohwert_sofort": sofort}
 
-    if not ok or sofort != value:
+    if abgelehnt:
+        res["bridge"] = "ABGELEHNT: " + abgelehnt
+    if not ok or sofort != value or abgelehnt:
         res["haelt"] = False
         res["hinweis"] = ("Schreiben von der Bridge abgelehnt oder sofort verworfen "
                           "(Wertebereich, Rate-Limit oder Kalt-Cache-Schutz).")
