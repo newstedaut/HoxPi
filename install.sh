@@ -327,8 +327,11 @@ if ask "MCP-Server installieren (KI-Assistenten wie Claude koennen die Anlage in
   run mkdir -p "$HOME_ADM/hoxpi-mcp"
   run install -m 755 mcp/hoxpi_mcp.py "$HOME_ADM/hoxpi-mcp/"
   if [ -f "$HOME_ADM/hoxpi-mcp/config.json" ]; then :
-  elif [ "$DRY" = "1" ]; then echo "  [dry-run] $HOME_ADM/hoxpi-mcp/config.json anlegen: {\"enable_write\": false, \"port\": 8808}"
-  else echo '{"enable_write": false, "port": 8808}' > "$HOME_ADM/hoxpi-mcp/config.json"; fi
+  elif [ "$DRY" = "1" ]; then echo "  [dry-run] $HOME_ADM/hoxpi-mcp/config.json anlegen: {\"enable_write\": false, \"port\": 8808, \"token\": \"<zufall>\"}"
+  else MCPTOK=$(head -c 32 /dev/urandom | base64 | tr -dc 'A-Za-z0-9' | head -c 40)
+  printf '{"enable_write": false, "port": 8808, "token": "%s"}\n' "$MCPTOK" > "$HOME_ADM/hoxpi-mcp/config.json"
+  chmod 600 "$HOME_ADM/hoxpi-mcp/config.json"; chown "$ADM" "$HOME_ADM/hoxpi-mcp/config.json"
+  echo "  MCP-Token (im KI-Client als 'Authorization: Bearer <token>' eintragen): $MCPTOK"; fi
   run install -m 644 systemd/hoxpi-mcp.service /etc/systemd/system/
   run systemctl daemon-reload
   run systemctl enable --now hoxpi-mcp

@@ -34,6 +34,7 @@ mcp = FastMCP("HoxPi", host=str(cfg.get("host", "0.0.0.0")), port=int(cfg.get("p
 #   "allowed_clients": ["192.168.1.0/24", "127.0.0.1"]  wer ueberhaupt verbinden darf (Standard: alle)
 #   "write_clients":   ["192.168.1.50", "127.0.0.1"]    wer write_register/set_whitelist aufrufen darf
 #                                                       (Standard: nur 127.0.0.1)
+#   "allow_whitelist_via_mcp": false                       Standard; true bietet set_whitelist wieder an (ohne 2FA!)
 #   "token":           "lange-zufallszeichenkette"      optional; dann Pflicht fuer JEDE Anfrage
 #                                                       (Header "Authorization: Bearer <token>")
 #   "allowed_hosts":   ["hoxpi.local"]                  zusaetzliche Host-Namen (IP-Adressen und
@@ -129,7 +130,7 @@ class AccessGuard:
         try:
             data = json.loads(body or b"null")
         except Exception:
-            data = None
+            return await self._deny(send, 400, "Anfrage nicht lesbar (Guard: fail closed)")
         for m in (data if isinstance(data, list) else [data]):
             if (isinstance(m, dict) and m.get("method") == "tools/call"
                     and (m.get("params") or {}).get("name") in WRITE_TOOLS):
@@ -458,7 +459,6 @@ def get_whitelist() -> dict:
             "register": [{"reg": r, "name": _name(r)} for r in wl],
             "schreiben_via_mcp": bool(_config().get("enable_write"))}
 
-@mcp.tool()
 def set_whitelist(reg: int, allow: bool, confirm: bool = False) -> dict:
     """Register zur Schreib-Whitelist hinzufügen/entfernen. Erfordert
     enable_write in der MCP-Config UND confirm=True."""
@@ -482,6 +482,12 @@ def set_whitelist(reg: int, allow: bool, confirm: bool = False) -> dict:
     os.chmod(tmp, 0o644)  # welt-lesbar: MQTT-Dienst (User admin) muss die Liste lesen koennen
     os.replace(tmp, p)
     return {"ok": True, "reg": reg, "allow": allow, "anzahl": len(wl)}
+
+# Die Whitelist ist die Grenze, die der Mensch der KI setzt - die KI soll sie nicht selbst erweitern koennen.
+# Rechte aendern deshalb nur noch im Dashboard (hinter der 2FA). Nur wer es ausdruecklich will:
+# config.json "allow_whitelist_via_mcp": true  (Standard: false, Werkzeug wird dann gar nicht angeboten).
+if _config().get("allow_whitelist_via_mcp") is True:
+    mcp.tool()(set_whitelist)
 
 # Register, die erfahrungsgemaess von aussen zurueckgesetzt werden.
 # Quelle: systematische Messung 20.08.2026 (schreiben, alle 2 s nachlesen).
