@@ -35,6 +35,25 @@ ARB_POLL    = 0x06E40801   # msg_id=6  (WEZ lesen)
 ARB_WRITE   = 0x07E40801   # msg_id=7  (WEZ schreiben)
 ARB_HV_POLL = 0x1FE08A08   # GET an HomeVent/Lueftung (UnitId 520), wie die Anlage selbst
 
+# --- Mehrere Geraete gleicher Art (22.11.2026, Issue #1) ----------------------
+# Antworten (0x42) kommen als Broadcast; der ABSENDER-Knoten steht in den Bits
+# 11-15 der CAN-ID (gemessen: WEZ 1 -> Knoten 1, HomeVent 520 -> Knoten 8,
+# PS 143 -> Knoten 15, zweite WP -> Knoten 2). Der Knoten ist UnitId & 0x1F.
+# Frueher wurde jede Antwort nur ueber (fg,fn,dp) zugeordnet: an einem Bus mit
+# zwei Waermepumpen landeten Werte der WP 2 in den Registern der WP 1.
+WEZ_UNITS = range(1, 17)            # offizielle Liste: WEZ UnitId 1..16
+WRITE_UNITS = {1, 520}              # nur dorthin gibt es einen geprueften SET-Weg
+
+def src_node(arb):
+    return (arb >> 11) & 0x1F
+
+def unit_node(unit_id):
+    return None if unit_id is None else int(unit_id) & 0x1F
+
+def poll_arb(unit_id):
+    """GET-ID fuer einen WEZ: ARB_POLL mit Ziel-Knoten in den unteren 11 Bit."""
+    return (ARB_POLL & ~0x7FF) | (int(unit_id) & 0x7FF)
+
 # Nur diese Register darf Loxone schreiben (verifizierte, sichere WEZ-Steuer-Datenpunkte).
 # Kritische/interne Register bleiben tabu, auch wenn Hoval sie als "writable" fuehrt.
 WRITE_WHITELIST = {
@@ -266,7 +285,7 @@ class Bridge:
                 return
             remaining = d[0] >> 3
             if remaining == 0:
-                self._parse_message(d[1:])
+                self._parse_message(d[1:], src_node(a))
             else:
                 self._pending[(devkey, d[1])] = [bytearray(d[2:]), remaining - 1, now]
         elif ftype == 0x00:
@@ -283,7 +302,7 @@ class Bridge:
                 data = unf[0]
                 if len(data) >= 2:
                     data = data[:-2]   # CRC abschneiden
-                self._parse_message(bytes(data))
+                self._parse_message(bytes(data), src_node(devkey))
 
     def _effective_rows(self, fg, fn, dp, regs):
         """32-Bit-Paare STRUKTURELL erkennen statt ueber den Namen.
@@ -329,7 +348,8 @@ class Bridge:
         self._pair_cache[key] = out
         return out
 
-    def _parse_message(self, raw):
+    def _parse_message(self, raw, src=None):
+        """src = Absender-Knoten aus der CAN-ID; None = ohne Absenderpruefung."""
         if len(raw) < 5:
             return
         if raw[0] != 0x42:                      # nur saubere ANSWER-Frames (16- u. 32-bit)
@@ -341,7 +361,11 @@ class Bridge:
         if not regs:
             return
         now = time.time()
+        check_src = src is not None and getattr(self.args, "sender_filter", True)
         for r in self._effective_rows(fg, fn, dp, regs):
+            # Nur in den Registerblock des Geraets schreiben, das geantwortet hat.
+            if check_src and r.get("unit_id") is not None and unit_node(r["unit_id"]) != src:
+                continue
             t = (r["type"] or "").upper()
             v = decode_value(t, val)
             if v is None:
@@ -487,6 +511,9 @@ class Bridge:
             seen.add(key)
             if r["unit_id"] == 1:
                 wez.append((ARB_POLL, r))
+            elif r["unit_id"] in WEZ_UNITS:
+                # weiterer Waermeerzeuger (WEZ 2..16) am selben Bus: nur LESEN, GET an seinen Knoten
+                wez.append((poll_arb(r["unit_id"]), r))
             elif r["unit_id"] == 520:
                 # ALLE Lueftungs-Register pollen, nicht nur fg=50 (Betriebswerte).
                 # fg=0 enthaelt u.a. Wartungs-/Filterzaehler (28934-28946) und den
@@ -534,6 +561,12 @@ class Bridge:
             reg = address + i
             r = self.regmap.by_reg.get(reg)
             if not r:
+                continue
+            # 0) Nur Geraete mit geprueftem SET-Weg. Frueher ging jedes Nicht-520-Register
+            #    ueber ARB_WRITE an Knoten 1 - ein Register der WP 2 haette WP 1 verstellt.
+            if r.get("unit_id") not in WRITE_UNITS:
+                log.warning("ABGELEHNT reg %d (%s): Schreiben auf UnitId %s nicht unterstuetzt (nur %s)",
+                            reg, r.get("name"), r.get("unit_id"), sorted(WRITE_UNITS))
                 continue
             # 1) Whitelist
             if reg not in current_whitelist():
@@ -658,6 +691,8 @@ def main():
     ap.add_argument("--no-poll", action="store_true")
     ap.add_argument("--enable-write", action="store_true",
                     help="erlaubt Modbus-FC6/16 -> CAN-SET (Schreiben auf die WP). Default AUS = nur lesen.")
+    ap.add_argument("--no-sender-filter", dest="sender_filter", action="store_false",
+                    help="Antworten wie vor 11/2026 nur ueber (fg,fn,dp) zuordnen, ohne Absender-Pruefung")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--log-level", default="INFO")
     args = ap.parse_args()

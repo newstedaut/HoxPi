@@ -5,7 +5,8 @@ Erlaubt KI-Assistenten (Claude, u. a.) die Anlage zu inspizieren, Werte zu
 erklären, Historie auszuwerten und - falls freigeschaltet - zu steuern.
 
 Transport: Streamable HTTP auf Port 8808 -> http://<pi-ip>:8808/mcp
-Schreiben: standardmäßig AUS (config.json: {"enable_write": true} zum Aktivieren).
+Schreiben: standardmäßig AUS (config.json: {"enable_write": true} zum Aktivieren)
+und dann nur von den Adressen in "write_clients" (Standard 127.0.0.1), siehe Zugangsschutz.
 Jeder Write läuft zusätzlich durch die Bridge-Sicherungen (Whitelist,
 Wertebereich, Rate-Limit, Kalt-Cache).
 """
@@ -24,7 +25,122 @@ def _config():
         return {}
 
 cfg = _config()
-mcp = FastMCP("HoxPi", host="0.0.0.0", port=int(cfg.get("port", 8808)))
+mcp = FastMCP("HoxPi", host=str(cfg.get("host", "0.0.0.0")), port=int(cfg.get("port", 8808)))
+
+# ---------- Zugangsschutz (22.11.2026) ----------
+# Der MCP-Server hat keine eigene Anmeldung. Ohne Schutz koennte jedes Geraet im
+# LAN (und ueber DNS-Rebinding sogar eine Webseite im Browser eines LAN-PCs) die
+# Schreib-Werkzeuge aufrufen, sobald enable_write an ist. Darum, alles in config.json:
+#   "allowed_clients": ["192.168.1.0/24", "127.0.0.1"]  wer ueberhaupt verbinden darf (Standard: alle)
+#   "write_clients":   ["192.168.1.50", "127.0.0.1"]    wer write_register/set_whitelist aufrufen darf
+#                                                       (Standard: nur 127.0.0.1)
+#   "token":           "lange-zufallszeichenkette"      optional; dann Pflicht fuer JEDE Anfrage
+#                                                       (Header "Authorization: Bearer <token>")
+#   "allowed_hosts":   ["hoxpi.local"]                  zusaetzliche Host-Namen (IP-Adressen und
+#                                                       localhost sind immer erlaubt)
+# Anfragen mit fremdem Host- oder Origin-Header (DNS-Rebinding, Browser) werden abgewiesen.
+import ipaddress, hmac
+
+WRITE_TOOLS = {"write_register", "set_whitelist"}
+
+def _nets(lst, default):
+    out = []
+    for x in (lst if lst is not None else default):
+        try:
+            out.append(ipaddress.ip_network(str(x).strip(), strict=False))
+        except ValueError:
+            pass
+    return out
+
+def _ip_in(ip, nets):
+    try:
+        a = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    if a.version == 6 and a.ipv4_mapped:
+        a = a.ipv4_mapped
+    return any(a in n for n in nets)
+
+def _host_ok(hostport, extra):
+    h = (hostport or "").strip().lower()
+    if h.startswith("["):
+        h = h[1:].split("]", 1)[0]
+    elif h.count(":") == 1:
+        h = h.split(":", 1)[0]
+    if not h:
+        return False
+    if h == "localhost" or h in extra:
+        return True
+    try:
+        ipaddress.ip_address(h)
+        return True
+    except ValueError:
+        return False
+
+class AccessGuard:
+    """Reine ASGI-Schicht vor dem MCP-App: Client-IP, Token, Host/Origin, Schreibrecht."""
+    MAX_BODY = 1_000_000
+
+    def __init__(self, app, conf):
+        self.app = app
+        self.allowed = _nets(conf.get("allowed_clients"), ["0.0.0.0/0", "::/0"])
+        self.writers = _nets(conf.get("write_clients"), ["127.0.0.1/32", "::1/128"])
+        self.token = str(conf.get("token") or "")
+        self.hosts = {str(h).lower() for h in conf.get("allowed_hosts", [])}
+
+    async def _deny(self, send, code, msg):
+        body = json.dumps({"fehler": msg}).encode()
+        await send({"type": "http.response.start", "status": code,
+                    "headers": [(b"content-type", b"application/json"),
+                                (b"content-length", str(len(body)).encode())]})
+        await send({"type": "http.response.body", "body": body})
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") != "http":
+            return await self.app(scope, receive, send)
+        client = (scope.get("client") or ("", 0))[0]
+        hdr = {k.decode("latin-1").lower(): v.decode("latin-1") for k, v in scope.get("headers", [])}
+        if not _ip_in(client, self.allowed):
+            return await self._deny(send, 403, "Client nicht erlaubt (allowed_clients)")
+        if not _host_ok(hdr.get("host", ""), self.hosts):
+            return await self._deny(send, 403, "Host-Header nicht erlaubt (allowed_hosts)")
+        origin = hdr.get("origin")
+        if origin and not _host_ok(urllib.parse.urlsplit(origin).netloc, self.hosts):
+            return await self._deny(send, 403, "Origin nicht erlaubt")
+        if self.token:
+            got = hdr.get("authorization", "")
+            got = got[7:] if got.lower().startswith("bearer ") else hdr.get("x-hoxpi-token", "")
+            if not hmac.compare_digest(got.encode(), self.token.encode()):
+                return await self._deny(send, 401, "Token fehlt oder falsch")
+        if scope.get("method") != "POST" or _ip_in(client, self.writers):
+            return await self.app(scope, receive, send)
+        # POST von einem Client ohne Schreibrecht: Body lesen und Schreib-Werkzeuge abweisen.
+        chunks, size, more = [], 0, True
+        while more:
+            msg = await receive()
+            if msg["type"] != "http.request":
+                break
+            chunks.append(msg.get("body", b""))
+            size += len(chunks[-1])
+            more = msg.get("more_body", False)
+            if size > self.MAX_BODY:
+                return await self._deny(send, 413, "Anfrage zu gross")
+        body = b"".join(chunks)
+        try:
+            data = json.loads(body or b"null")
+        except Exception:
+            data = None
+        for m in (data if isinstance(data, list) else [data]):
+            if (isinstance(m, dict) and m.get("method") == "tools/call"
+                    and (m.get("params") or {}).get("name") in WRITE_TOOLS):
+                return await self._deny(send, 403, "Schreib-Werkzeuge von diesem Client nicht erlaubt (write_clients)")
+        sent = [False]
+        async def replay():
+            if not sent[0]:
+                sent[0] = True
+                return {"type": "http.request", "body": body, "more_body": False}
+            return await receive()
+        return await self.app(scope, replay, send)
 
 # ---------- Anlagen-Daten ----------
 _cache = {}
@@ -577,4 +693,6 @@ def about() -> dict:
     }
 
 if __name__ == "__main__":
-    mcp.run(transport="streamable-http")
+    import uvicorn
+    uvicorn.run(AccessGuard(mcp.streamable_http_app(), cfg),
+                host=mcp.settings.host, port=mcp.settings.port, log_level="info")
