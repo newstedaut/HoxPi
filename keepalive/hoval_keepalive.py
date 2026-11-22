@@ -37,6 +37,11 @@ if not F.get("keepalive", {}).get("enabled", True):
 
 dps = F.get("keepalive_dps") or DEFAULT_DPS
 
+# Harte Grenze (22.11.2026): NUR diese Datenpunkte mit diesen Wertebereichen.
+# hoxpi-features.json ist ueber das Dashboard beschreibbar; ohne diese Pruefung haette
+# ein manipulierter Eintrag beliebige fg=1-Parameter alle 5 min per CAN-SET gesetzt.
+ALLOWED = {"30046": (0, 31), "30057": (0, 31), "30066": (0, 31), "3032": (0, 4)}
+
 ARB = 0x1FE08801
 try:
     bus = can.Bus(channel='can0', interface='socketcan')
@@ -51,9 +56,18 @@ def setdp(dp, val, fg=1, fn=0):
 
 done = []
 for dp, cfg in dps.items():
-    if cfg.get("enabled", True):
-        setdp(int(dp), int(cfg.get("value", 0)))
-        done.append("dp%s=%s" % (dp, cfg.get("value", 0)))
+    if not isinstance(cfg, dict) or not cfg.get("enabled", True):
+        continue
+    dp = str(dp)
+    try:
+        val = int(cfg.get("value", 0))
+    except (TypeError, ValueError):
+        val = None
+    if dp not in ALLOWED or val is None or not ALLOWED[dp][0] <= val <= ALLOWED[dp][1]:
+        done.append("dp%s ABGELEHNT (nicht erlaubt)" % dp[:12])
+        continue
+    setdp(int(dp), val)
+    done.append("dp%s=%s" % (dp, val))
 
 bus.shutdown()
 print('%s keepalive ok: %s' % (time.strftime('%F %T'), ", ".join(done) if done else "(nichts aktiv)"))

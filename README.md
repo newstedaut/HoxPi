@@ -95,6 +95,8 @@ The installer asks to download the **official Hoval datapoint list** (xlsx) from
 - Run in a **trusted home network**; nothing leaves your network — no cloud, no telemetry
 - Writing starts disabled except for a small, curated whitelist; every write is additionally validated (range, rate limit, cold-cache)
 - The MCP server has no login of its own: if you enable `enable_write`, also set `write_clients` (and ideally `token`) — see *MCP access guard* above
+- **Modbus-TCP has no login of its own**: limit port 502 to your Loxone Miniserver / HA host with `--allow-ip 127.0.0.1,192.168.1.20` or a file `modbus_allow_ip` next to `hoval_bridge.py` (one address or network per line). Rejected or disabled writes no longer change the value other clients read
+- **Dashboard**: POSTs from a foreign page (`Origin`) and requests with a foreign `Host` header (DNS rebinding) are rejected; behind a reverse proxy with its own hostname add it to `HOXPI_ALLOWED_HOSTS` (comma separated). Every browser gets its own 2FA setup secret; TOTP codes cannot be reused and failed attempts are limited per client. The keepalive only ever writes 30-046 / 30-057 / 30-066 (0-31) and 03-032 (0-4)
 - Found a vulnerability? Please report it privately via the repository's **Security** tab → *Report a vulnerability*, not in a public issue
 
 ## Credits & thanks
@@ -204,6 +206,8 @@ Der Installer fragt nach der **offiziellen Hoval-Datenpunktliste** (xlsx) von ho
 - Im **vertrauenswürdigen Heimnetz** betreiben; es verlässt nichts dein Netzwerk — keine Cloud, keine Telemetrie
 - Schreiben ist ab Werk auf eine kleine, geprüfte Whitelist beschränkt; jeder Write wird zusätzlich validiert
 - Der MCP-Server hat keine eigene Anmeldung: wer `enable_write` einschaltet, setzt auch `write_clients` (und am besten `token`) — siehe *MCP-Zugangsschutz* oben
+- **Modbus-TCP hat keine eigene Anmeldung**: Port 502 auf den Loxone-Miniserver / HA-Rechner begrenzen, mit `--allow-ip 127.0.0.1,192.168.1.20` oder einer Datei `modbus_allow_ip` neben `hoval_bridge.py` (eine Adresse oder ein Netz pro Zeile). Abgelehnte oder gesperrte Schreibbefehle verändern den Wert, den andere Clients lesen, nicht mehr
+- **Dashboard**: POSTs von fremden Seiten (`Origin`) und Anfragen mit fremdem `Host`-Header (DNS-Rebinding) werden abgewiesen; hinter einem Reverse-Proxy mit eigenem Namen diesen in `HOXPI_ALLOWED_HOSTS` eintragen (kommagetrennt). Jeder Browser bekommt sein eigenes 2FA-Setup-Geheimnis; TOTP-Codes sind nicht wiederverwendbar, Fehlversuche je Client begrenzt. Der Keepalive schreibt nur noch 30-046 / 30-057 / 30-066 (0-31) und 03-032 (0-4)
 - Sicherheitslücke gefunden? Bitte privat über den Reiter **Security** des Repos → *Report a vulnerability* melden, nicht in einem öffentlichen Issue
 
 ## Danksagung

@@ -530,11 +530,53 @@ def net_info():
     except Exception:
         return None
 
+def _tmpfile(target):
+    """Eindeutige tmp-Datei im Zielordner (mkstemp, O_EXCL): kein Symlink-Trick, keine Kollision."""
+    import tempfile as _tf
+    fd, tmp = _tf.mkstemp(prefix=".hoxpi-", suffix=".tmp", dir=os.path.dirname(target) or ".")
+    os.close(fd)
+    return tmp
+
 # ---------- 2FA (TOTP) für Schreibaktionen ----------
 AUTH_PATH = "/home/admin/hoval-bridge/auth.json"
 SESSIONS = {}          # token -> ablauf (unix)
-_auth_pending = {}     # {"secret": ...} während des Setups
-_auth_tries = []       # timestamps fehlgeschlagener Versuche (Rate-Limit)
+_auth_pending = {}     # setup-cookie -> secret (je Browser eigenes Setup-Geheimnis, 22.11.2026)
+_auth_tries = {}       # client-ip -> [timestamps fehlgeschlagener Versuche] (Rate-Limit je Client)
+_auth_lock = threading.Lock()
+_totp_last = {"step": None}   # zuletzt verbrauchter TOTP-Zeitschritt (kein Wiederverwenden)
+MAX_BODY = 65536
+
+# ---------- Schutz gegen CSRF / DNS-Rebinding (22.11.2026) ----------
+# Eine fremde Webseite im Browser eines LAN-PCs kann sonst POSTs an das Dashboard
+# schicken (text/plain braucht keinen Preflight) oder es per DNS-Rebinding auslesen.
+# Erlaubt sind Host-Namen: IP-Adressen, localhost, der Rechnername (+ .local) und
+# die Namen in HOXPI_ALLOWED_HOSTS (kommagetrennt, z. B. fuer einen Reverse-Proxy).
+def _host_only(hostport):
+    h = (hostport or "").strip().lower().rstrip(".")
+    if h.startswith("["):
+        return h[1:].split("]", 1)[0]
+    if h.count(":") == 1:
+        h = h.split(":", 1)[0]
+    return h
+
+def host_ok(hostport):
+    import ipaddress, socket as _so
+    h = _host_only(hostport)
+    if not h:
+        return False
+    try:
+        ipaddress.ip_address(h)
+        return True
+    except ValueError:
+        pass
+    names = {"localhost"}
+    try:
+        hn = _so.gethostname().lower()
+        names |= {hn, hn + ".local"}
+    except Exception:
+        pass
+    names |= {x.strip().lower() for x in os.environ.get("HOXPI_ALLOWED_HOSTS", "").split(",") if x.strip()}
+    return h in names
 
 def auth_secret():
     try:
@@ -554,15 +596,33 @@ def _totp(secret_b32, t=None, step=30, digits=6):
     code = (struct.unpack(">I", h[o:o + 4])[0] & 0x7FFFFFFF) % (10 ** digits)
     return str(code).zfill(digits)
 
-def totp_ok(secret, code):
+def totp_ok(secret, code, consume=True):
+    import hmac as _hm
     code = (code or "").strip().replace(" ", "")
+    if not (len(code) == 6 and code.isdigit()):
+        return False
     now = _time.time()
-    return any(_totp(secret, now + d * 30) == code for d in (-1, 0, 1))
+    for d in (-1, 0, 1):
+        step = int((now + d * 30) // 30)
+        if _hm.compare_digest(_totp(secret, now + d * 30), code):
+            if consume:
+                if _totp_last["step"] is not None and step <= _totp_last["step"]:
+                    return False          # Code schon verbraucht (Replay)
+                _totp_last["step"] = step
+            return True
+    return False
 
-def auth_rate_ok():
+def auth_try(ip, check_only=False):
+    """Rate-Limit je Client: max. 8 Fehlversuche / 5 min. Gibt False zurueck, wenn gesperrt."""
     now = _time.time()
-    _auth_tries[:] = [t for t in _auth_tries if now - t < 300]
-    return len(_auth_tries) < 8
+    with _auth_lock:
+        lst = [t for t in _auth_tries.get(ip, []) if now - t < 300]
+        _auth_tries[ip] = lst
+        return len(lst) < 8
+
+def auth_fail(ip):
+    with _auth_lock:
+        _auth_tries.setdefault(ip, []).append(_time.time())
 
 def new_session():
     import secrets as _secrets
@@ -1046,7 +1106,32 @@ def discovery_card():
     out.append("</div></div>")
     return "".join(out)
 
+# Keepalive darf NUR diese Datenpunkte schreiben (fg=1 fn=0), mit festen Wertebereichen.
+# 30046/30057/30066 = Eingangs-Zuordnungen (0 = AUS, sonst Klemmen-Code wie am Bedienteil, Assistent 0..31);
+# 3032 = Regelstrategie HK1 (0..4). Alles andere bleibt dem Keepalive verboten.
+KEEPALIVE_ALLOWED = {"30046": (0, 31), "30057": (0, 31), "30066": (0, 31), "3032": (0, 4)}
+
+def check_keepalive_dps(kd):
+    if not isinstance(kd, dict) or len(kd) > len(KEEPALIVE_ALLOWED):
+        return None, "keepalive_dps ungueltig"
+    out = {}
+    for dp, cfg in kd.items():
+        dp = str(dp)
+        if dp not in KEEPALIVE_ALLOWED or not isinstance(cfg, dict):
+            return None, "keepalive_dps: Datenpunkt " + dp[:12] + " nicht erlaubt"
+        lo, hi = KEEPALIVE_ALLOWED[dp]
+        try:
+            v = int(cfg.get("value", 0))
+        except (TypeError, ValueError):
+            return None, "keepalive_dps " + dp + ": Wert ungueltig"
+        if not lo <= v <= hi:
+            return None, "keepalive_dps " + dp + ": erlaubt " + str(lo) + "-" + str(hi)
+        out[dp] = {"enabled": bool(cfg.get("enabled", True)), "value": v,
+                   "label": str(cfg.get("label", ""))[:80]}
+    return out, None
+
 class H(http.server.BaseHTTPRequestHandler):
+    timeout = 30   # s; haengende/halb offene Verbindungen binden keinen Thread ewig
     def log_message(self,*a): pass
     def do_GET(self):
         pr = urlparse(self.path); p = pr.path; q = parse_qs(pr.query)
@@ -1059,7 +1144,10 @@ class H(http.server.BaseHTTPRequestHandler):
             lang = "de"
         _ctx.lang = lang
         if p in ("/hoxpi-claude-setup.bat", "/hoxpi-claude-setup.ps1", "/hoxpi-claude-setup.sh"):
-            host = (self.headers.get("Host") or "192.168.1.50").split(":")[0]
+            host = _host_only(self.headers.get("Host"))
+            import re as _re
+            if not host_ok(self.headers.get("Host")) or not _re.fullmatch(r"[A-Za-z0-9.\-]+", host or ""):
+                host = self.server.server_address[0] if self.server.server_address[0] not in ("", "0.0.0.0") else "192.168.1.50"
             if p.endswith(".bat"):
                 data = claude_setup_bat(host).encode("utf-8")
             elif p.endswith(".sh"):
@@ -1130,10 +1218,16 @@ class H(http.server.BaseHTTPRequestHandler):
         out = page(act.title(), act, body, rf, path=p).encode("utf-8")
         self.send_response(200); self.send_header("Content-Type","text/html; charset=utf-8")
         if setcookie: self.send_header("Set-Cookie", f"lang={lang}; Path=/; Max-Age=31536000")
+        if getattr(self, "_extra_cookie", None): self.send_header("Set-Cookie", self._extra_cookie)
         self.end_headers(); self.wfile.write(out)
 
     def do_POST(self):
         pr = urlparse(self.path)
+        origin = self.headers.get("Origin")
+        if not host_ok(self.headers.get("Host")) or (
+                origin is not None and _host_only(urlparse(origin).netloc) != _host_only(self.headers.get("Host"))):
+            self.json_out({"ok": False, "fehler": "Anfrage von fremder Seite abgewiesen (Host/Origin)"}, 403)
+            return
         if pr.path == "/api/auth/setup":
             self.api_auth_setup(); return
         if pr.path == "/api/auth/login":
@@ -1163,8 +1257,7 @@ class H(http.server.BaseHTTPRequestHandler):
         if pr.path != "/api/whitelist":
             self.send_response(404); self.end_headers(); return
         try:
-            ln = int(self.headers.get("Content-Length", 0))
-            body = json.loads(self.rfile.read(ln) or b"{}")
+            body = self._read_json()
             reg = int(body["reg"]); allow = bool(body["allow"])
             r = regmap().get(reg)
             if not r or str(r.get("writable")).lower() != "yes":
@@ -1294,8 +1387,7 @@ function tgl(cb,reg){
     def api_network(self):
         import subprocess, re as _re, threading as _th
         try:
-            ln = int(self.headers.get("Content-Length", 0))
-            body = json.loads(self.rfile.read(ln) or b"{}")
+            body = self._read_json()
             ni = net_info()
             if not ni: raise ValueError("eth0-Verbindung nicht gefunden")
             name = ni["con"]
@@ -1360,8 +1452,7 @@ function nsave(){
     def api_stats(self):
         import subprocess
         try:
-            ln = int(self.headers.get("Content-Length", 0))
-            body = json.loads(self.rfile.read(ln) or b"{}")
+            body = self._read_json()
             on = bool(body.get("on"))
             act = ["enable", "--now"] if on else ["disable", "--now"]
             for s in self.STAT_SVCS:
@@ -1463,7 +1554,7 @@ function stoggle(on){
                     self.json_out({"ok": False, "fehler": "Webhook-URL muss mit http:// oder https:// beginnen"}); return
                 cur["webhook_url"] = u or None
             if "mqtt" in body: cur["mqtt"] = bool(body["mqtt"])
-            tmp = self.WATCH_CONF_F + ".tmp"
+            tmp = _tmpfile(self.WATCH_CONF_F)
             with open(tmp, "w", encoding="utf-8") as f: json.dump(cur, f, ensure_ascii=False)
             try:
                 st = _o.stat(self.WATCH_CONF_F); _o.chown(tmp, st.st_uid, st.st_gid); _o.chmod(tmp, 0o664)
@@ -1520,11 +1611,19 @@ function stoggle(on){
             bad = [k for k in body if k not in allowed]
             if bad:
                 self.json_out({"ok": False, "fehler": "unbekannte Schluessel: " + ",".join(bad)}); return
+            for k in allowed - {"keepalive_dps", "assistent"}:
+                if k in body and not isinstance(body[k], dict):
+                    self.json_out({"ok": False, "fehler": "Block '" + k + "' muss ein Objekt sein"}); return
+            if "keepalive_dps" in body:
+                kd, err = check_keepalive_dps(body["keepalive_dps"])
+                if err:
+                    self.json_out({"ok": False, "fehler": err}); return
+                body["keepalive_dps"] = kd
             try:
                 with open(self.FEATURES_F, encoding="utf-8") as f: cur = json.load(f)
             except Exception: cur = {}
             cur.update(body)
-            tmp = self.FEATURES_F + ".tmp"
+            tmp = _tmpfile(self.FEATURES_F)
             with open(tmp, "w", encoding="utf-8") as f: json.dump(cur, f, indent=1, ensure_ascii=False)
             _o.replace(tmp, self.FEATURES_F)
             self.json_out({"ok": True})
@@ -1549,7 +1648,7 @@ function stoggle(on){
                     out = {"ok": False, "fehler": "Bestätigung nötig"}
                 else:
                     kd[dp]["enabled"] = on
-                    tmp = self.FEATURES_F + ".tmp"
+                    tmp = _tmpfile(self.FEATURES_F)
                     with open(tmp, "w", encoding="utf-8") as f: json.dump(d, f, indent=1, ensure_ascii=False)
                     _o.replace(tmp, self.FEATURES_F)
                     out = {"ok": True, "dp": dp, "on": on}
@@ -1564,7 +1663,7 @@ function stoggle(on){
                     with open(self.FEATURES_F, encoding="utf-8") as f: d = json.load(f)
                 except Exception: d = {}
                 d.setdefault(key, {})["enabled"] = on
-                tmp = self.FEATURES_F + ".tmp"
+                tmp = _tmpfile(self.FEATURES_F)
                 with open(tmp, "w", encoding="utf-8") as f: json.dump(d, f, indent=1)
                 _o.replace(tmp, self.FEATURES_F)
                 out = {"ok": True, "key": key, "on": on}
@@ -1700,6 +1799,13 @@ function ftoggle(key,on,crit){
         self.end_headers()
         self.wfile.write(data)
 
+    def cookie(self, name):
+        for part in self.headers.get("Cookie", "").split(";"):
+            part = part.strip()
+            if part.startswith(name + "="):
+                return part.split("=", 1)[1]
+        return None
+
     def session_ok(self):
         for part in self.headers.get("Cookie", "").split(";"):
             part = part.strip()
@@ -1711,27 +1817,30 @@ function ftoggle(key,on,crit){
         return False
 
     def _read_json(self):
-        ln = int(self.headers.get("Content-Length", 0))
-        return json.loads(self.rfile.read(ln) or b"{}")
+        ln = int(self.headers.get("Content-Length", 0) or 0)
+        if ln < 0 or ln > MAX_BODY:
+            raise ValueError("Anfrage zu gross")
+        return json.loads(self.rfile.read(ln) or b"{}") if ln else {}
 
     def api_auth_setup(self):
         try:
             body = self._read_json()
             if auth_enabled():
                 self.json_out({"ok": False, "fehler": "2FA ist schon aktiv"}); return
-            sec = _auth_pending.get("secret")
+            sec = _auth_pending.get(self.cookie("hoxpi_setup") or "")
             if not sec:
                 self.json_out({"ok": False, "fehler": "Kein Setup gestartet - Seite Sicherheit neu laden"}); return
-            if not auth_rate_ok():
+            ip = self.client_address[0]
+            if not auth_try(ip):
                 self.json_out({"ok": False, "fehler": "Zu viele Versuche - 5 Minuten warten"}, 429); return
             if not totp_ok(sec, body.get("code", "")):
-                _auth_tries.append(_time.time())
+                auth_fail(ip)
                 self.json_out({"ok": False, "fehler": "Code falsch - Uhrzeit am Handy pruefen und neu versuchen"}); return
             import os as _os
             fd = _os.open(AUTH_PATH, _os.O_WRONLY | _os.O_CREAT | _os.O_TRUNC, 0o600)
             with _os.fdopen(fd, "w", encoding="utf-8") as f:
                 json.dump({"secret": sec, "aktiviert": datetime.datetime.now().isoformat(timespec="seconds")}, f)
-            _auth_pending.clear()
+            _auth_pending.clear()   # alle offenen Setups verwerfen
             tok = new_session()
             self.json_out({"ok": True}, cookie=f"hoxpi_session={tok}; Path=/; Max-Age=2592000; HttpOnly; SameSite=Lax")
         except Exception as e:
@@ -1743,10 +1852,11 @@ function ftoggle(key,on,crit){
             sec = auth_secret()
             if not sec:
                 self.json_out({"ok": False, "fehler": "2FA ist nicht eingerichtet"}); return
-            if not auth_rate_ok():
+            ip = self.client_address[0]
+            if not auth_try(ip):
                 self.json_out({"ok": False, "fehler": "Zu viele Versuche - 5 Minuten warten"}, 429); return
             if not totp_ok(sec, body.get("code", "")):
-                _auth_tries.append(_time.time())
+                auth_fail(ip)
                 self.json_out({"ok": False, "fehler": "Code falsch"}); return
             tok = new_session()
             self.json_out({"ok": True}, cookie=f"hoxpi_session={tok}; Path=/; Max-Age=2592000; HttpOnly; SameSite=Lax")
@@ -1759,8 +1869,11 @@ function ftoggle(key,on,crit){
             sec = auth_secret()
             if not sec:
                 self.json_out({"ok": False, "fehler": "2FA ist nicht aktiv"}); return
+            ip = self.client_address[0]
+            if not auth_try(ip):
+                self.json_out({"ok": False, "fehler": "Zu viele Versuche - 5 Minuten warten"}, 429); return
             if not (self.session_ok() and totp_ok(sec, body.get("code", ""))):
-                _auth_tries.append(_time.time())
+                auth_fail(ip)
                 self.json_out({"ok": False, "fehler": "Angemeldete Sitzung + gueltiger Code noetig"}); return
             import os as _os
             _os.remove(AUTH_PATH)
@@ -1780,7 +1893,17 @@ function apost(url, body, msgid){
 </script>"""
         out = ['<h1>' + L("Sicherheit", "Security") + '</h1>']
         if not auth_enabled():
-            sec = _auth_pending.setdefault("secret", gen_secret())
+            # Jeder Browser bekommt sein EIGENES Setup-Geheimnis (Cookie hoxpi_setup). Frueher sah
+            # jeder Besucher dasselbe Geheimnis und kannte so den spaeteren 2FA-Schluessel.
+            import secrets as _sx
+            stok = self.cookie("hoxpi_setup")
+            if not stok or stok not in _auth_pending:
+                stok = _sx.token_hex(16)
+                if len(_auth_pending) > 50:
+                    _auth_pending.clear()
+                _auth_pending[stok] = gen_secret()
+                self._extra_cookie = f"hoxpi_setup={stok}; Path=/; Max-Age=3600; HttpOnly; SameSite=Strict"
+            sec = _auth_pending[stok]
             uri = "otpauth://totp/HoxPi?secret=" + sec + "&issuer=HoxPi"
             qr = qr_svg(uri)
             out.append('<div class="note warn">' + L(

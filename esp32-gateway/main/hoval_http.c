@@ -68,8 +68,18 @@ static bool check_token(httpd_req_t *req)
 {
     const char *want = CONFIG_HOXPI_HTTP_TOKEN;
     if (!want[0]) { send_error(req, "403 Forbidden", "POST gesperrt: HOXPI_HTTP_TOKEN ist leer (menuconfig)"); return false; }
+    size_t wl = strlen(want);
+    if (wl < 16 || wl > 64) { send_error(req, "403 Forbidden", "POST gesperrt: HOXPI_HTTP_TOKEN muss 16-64 Zeichen haben"); return false; }
     char got[65] = { 0 };
-    if (httpd_req_get_hdr_value_str(req, "X-Token", got, sizeof got) != ESP_OK || strcmp(got, want) != 0) {
+    bool ok = httpd_req_get_hdr_value_str(req, "X-Token", got, sizeof got) == ESP_OK && strlen(got) == wl;
+    /* Vergleich in konstanter Zeit (kein Abbruch beim ersten falschen Zeichen) */
+    unsigned char diff = ok ? 0 : 1;
+    for (size_t i = 0; i < wl; i++) diff |= (unsigned char)(got[i] ^ want[i]);
+    if (diff != 0) {
+        static int64_t s_last_fail_us;
+        int64_t now = esp_timer_get_time();
+        if (now - s_last_fail_us < 1000000) vTaskDelay(pdMS_TO_TICKS(1000));   /* Bremse gegen Durchprobieren */
+        s_last_fail_us = esp_timer_get_time();
         send_error(req, "401 Unauthorized", "X-Token fehlt oder falsch");
         return false;
     }

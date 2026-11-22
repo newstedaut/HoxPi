@@ -429,6 +429,10 @@ def get_history(metric: str = "aussentemp_c", hours: float = 24) -> dict:
                 names = json.load(f)["data"]
             return {"metriken": [n.replace("hoval_", "") for n in names if n.startswith("hoval_")]}
         name = metric if metric.startswith("hoval_") else f"hoval_{metric}"
+        import re as _re
+        if not _re.fullmatch(r"hoval_[A-Za-z0-9_]{1,80}", name):
+            return {"fehler": "ungueltiger Metrikname (nur hoval_<buchstaben/ziffern/_>)"}
+        hours = max(0.1, min(float(hours), 24 * 400))   # max. Prometheus-Aufbewahrung
         end = _time.time(); start = end - hours * 3600
         step = max(60, int(hours * 3600 / 300))
         q = urllib.parse.urlencode({"query": name, "start": start, "end": end, "step": step})
@@ -600,6 +604,7 @@ def schreiblast(minuten: int = 30, reg: int = 0) -> dict:
     minuten: betrachteter Zeitraum (Default 30)
     reg:     optional auf ein einzelnes Register einschraenken
     """
+    minuten = max(1, min(int(minuten), 7 * 24 * 60))   # hoechstens 7 Tage Journal
     try:
         out = subprocess.run(
             ["journalctl", "-u", "hoval-bridge", "--since", "-%d min" % minuten,
@@ -694,5 +699,8 @@ def about() -> dict:
 
 if __name__ == "__main__":
     import uvicorn
+    # proxy_headers=False: X-Forwarded-For darf die Client-Adresse nicht vortaeuschen
+    # (sonst saehe ein Client hinter einem lokalen Proxy wie 127.0.0.1 = Schreib-Client aus).
     uvicorn.run(AccessGuard(mcp.streamable_http_app(), cfg),
-                host=mcp.settings.host, port=mcp.settings.port, log_level="info")
+                host=mcp.settings.host, port=mcp.settings.port, log_level="info",
+                proxy_headers=False)

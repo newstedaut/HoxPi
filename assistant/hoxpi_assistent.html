@@ -125,6 +125,7 @@ h2{font-size:1.15rem;color:#e2001a;margin:1.4rem 0 .4rem}
 </main>
 <footer id="assfoot">HoxPi · offenes Gateway für Hoval® TopTronic® E · Trockentest, keine Schreibzugriffe</footer>
 <script>
+function esc(x){return String(x==null?'':x).replace(/[&<>"']/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];});}
 var A={hk:null,mode:null,persist:null,c066:null,c066l:'',ha:null,extras:["watch","backup","cop_filter"]};
 var STEPS=6, cur=0;
 var prog=document.getElementById('prog');
@@ -201,10 +202,10 @@ function buildSummary(){
  var mm={busfree:'Relais-frei über den Bus',contact:'Klassisch über Kontakt/Brücke',readonly:'Nur mitlesen'}[A.mode];
  var rows='';
  function row(k,v){return '<tr><td>'+k+'</td><td>'+v+'</td></tr>';}
- rows+=row('Heizkreise', A.hk);
+ rows+=row('Heizkreise', esc(A.hk));
  rows+=row('Steuerung', mm);
  if(A.mode==='busfree') rows+=row('30-xxx nachschreiben', A.persist==='yes'?'<span class="pill pon">ja</span>':'<span class="pill poff">nein</span>');
- if(A.mode==='contact') rows+=row('Umschalt-Kontakt (30-066)', (A.c066l?A.c066l+' = ':'')+'<code>'+A.c066+'</code>');
+ if(A.mode==='contact') rows+=row('Umschalt-Kontakt (30-066)', (A.c066l?esc(A.c066l)+' = ':'')+'<code>'+esc(A.c066)+'</code>');
  rows+=row('Home Assistant', A.ha==='yes'?'<span class="pill pon">an (MQTT)</span>':'<span class="pill poff">aus</span>');
  rows+=row('Störungs-Wächter', feats.watch.enabled?'<span class="pill pon">an</span>':'<span class="pill poff">aus</span>');
  rows+=row('Backup', feats.backup.enabled?'<span class="pill pon">an</span>':'<span class="pill poff">aus</span>');
@@ -218,7 +219,7 @@ function buildSummary(){
   else todo.push('Kein Keepalive — du bestätigst, dass die 30-xxx auf deiner Anlage von selbst halten.');
   todo.push('Sollwert-Register (1490/19482 …) müssen in der Whitelist freigegeben werden (Seite „Register").');
  } else if(A.mode==='contact'){
-  todo.push('HoxPi hält die Kontakt-Zuordnung 30-066 = '+A.c066+(A.c066l?' ('+A.c066l+')':'')+' nach — der physische Kontakt schaltet Heizen/Kühlen.');
+  todo.push('HoxPi hält die Kontakt-Zuordnung 30-066 = '+esc(A.c066)+(A.c066l?' ('+esc(A.c066l)+')':'')+' nach — der physische Kontakt schaltet Heizen/Kühlen.');
   todo.push('Sollwert-Register (1490/19482 …) in der Whitelist freigeben (Seite „Register").');
  } else {
   todo.push('Keine Schreibfreigaben nötig — reines Monitoring.');
@@ -280,7 +281,7 @@ function prefill(c){
  if(mode==='contact'&&c066!==null&&c066!==undefined){var i=document.getElementById('c066');i.value=c066;A.c066=String(c066);document.getElementById('c066l').value=c066l;A.c066l=c066l;}
  var hk=a.hk||1; var b=document.querySelector('.num[data-k=hk] button[data-v="'+hk+'"]'); if(b)b.onclick();
  var n=document.getElementById('prefillnote'); n.style.display='';
- n.innerHTML='↩️ <b>Vorbelegt</b> aus der bestehenden Konfiguration dieses HoxPi'+(c._stand?' (Stand '+c._stand+')':'')+', aus '+src+(a.hk?'':' — <b>Heizkreis-Anzahl bitte prüfen</b>')+'. Einfach durchklicken und anpassen; geschrieben wird erst am Ende.';
+ n.innerHTML='↩️ <b>Vorbelegt</b> aus der bestehenden Konfiguration dieses HoxPi'+(c._stand?' (Stand '+esc(c._stand)+')':'')+', aus '+src+(a.hk?'':' — <b>Heizkreis-Anzahl bitte prüfen</b>')+'. Einfach durchklicken und anpassen; geschrieben wird erst am Ende.';
  paint();
 }
 paint();

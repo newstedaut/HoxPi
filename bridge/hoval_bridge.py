@@ -151,8 +151,10 @@ def current_whitelist():
             _wl_cache["mtime"] = mt
             log.info("Whitelist neu geladen: %d Register erlaubt", len(_wl_cache["set"]))
         except Exception as e:
-            log.error("whitelist.json fehlerhaft (%s) - nutze eingebaute Liste", e)
-            return WRITE_WHITELIST
+            # 22.11.2026: fail closed. Frueher fiel eine kaputte Datei auf die breite
+            # eingebaute Liste zurueck und gab Register frei, die der Nutzer entfernt hatte.
+            log.error("whitelist.json fehlerhaft (%s) - Schreiben gesperrt, bis die Datei repariert ist", e)
+            return set()
     return _wl_cache["set"] if _wl_cache["set"] is not None else WRITE_WHITELIST
 
 
@@ -203,12 +205,19 @@ def build_modbus(regmap, on_write):
             # interne Aktualisierung aus CAN-Dekodierung -> NUR Datastore, KEIN Rueckschreiben
             super().setValues(address, values)
         def setValues(self, address, values):
-            # externer Modbus-Schreibzugriff (FC6/FC16) von Loxone -> ggf. CAN-SET
-            super().setValues(address, values)
+            # externer Modbus-Schreibzugriff (FC6/FC16) von Loxone -> ggf. CAN-SET.
+            # 22.11.2026: NUR angenommene Werte in den Datenspeicher. Frueher stand jeder
+            # geschriebene Wert sofort im Speicher, auch abgelehnte und auch ohne
+            # --enable-write: ein beliebiger Modbus-Client konnte so Messwerte (z. B.
+            # Aussentemperatur 1477) fuer alle Leser faelschen, bis zum naechsten CAN-Poll.
             try:
-                on_write(address, values)
+                ok = on_write(address, values) or set()
             except Exception as e:
                 log.error("write-callback: %s", e)
+                ok = set()
+            for i, v in enumerate(values):
+                if address + i in ok:
+                    super().setValues(address + i, [v])
     init = {r: 0 for r in regmap.by_reg}      # alle bekannten Register, Startwert 0
     block = WriteBlock(init)
     slave = ModbusSlaveContext(hr=block, zero_mode=True)  # Adresse = Registernummer
@@ -553,9 +562,10 @@ class Bridge:
     # ----- Schreiben: Modbus FC6 -> CAN SET -----
     def on_write(self, address, values):
         import can, time
+        accepted = set()
         if not getattr(self.args, "enable_write", False):
             log.warning("Schreibzugriff deaktiviert (--enable-write fehlt) - ignoriere Modbus-Write reg %s", address)
-            return
+            return accepted
         now = time.time()
         for i, v in enumerate(values):
             reg = address + i
@@ -607,6 +617,7 @@ class Bridge:
                 # WEZ-Schreib-ID (ARB_WRITE) wuerde von der Lueftung ignoriert.
                 self.send_msg(can.Message(arbitration_id=(ARB_HV_POLL if r.get("unit_id")==520 else ARB_WRITE),
                                           data=payload, is_extended_id=True))
+                accepted.add(reg)
                 log.info("SET reg %d (%s) <- %s (raw)", reg, r.get("name"), v)
                 # --- Kanal-Exklusion: aktiver Kanal (>0) nullt den Partner-Kanal ---
                 partner = EXCL_PAIRS.get(reg)
@@ -632,6 +643,7 @@ class Bridge:
                                 log.error("exkl-send: %s", e)
             except Exception as e:
                 log.error("set-send: %s", e)
+        return accepted
 
     def run(self):
         self.open_can()
@@ -674,9 +686,62 @@ class Bridge:
                 threading.Thread(target=self.poll_targets,
                                  args=(fast, self.args.fast_interval, "fast"), daemon=True).start()
         from pymodbus.server import StartTcpServer
+        allow = getattr(self.args, "allow_ip", "")
+        if not allow:
+            # Alternative ohne systemd-Aenderung: Datei "modbus_allow_ip" neben diesem Skript,
+            # eine Adresse/ein Netz pro Zeile oder kommagetrennt, # = Kommentar.
+            f = os.path.join(os.path.dirname(os.path.abspath(__file__)), "modbus_allow_ip")
+            try:
+                with open(f, encoding="utf-8") as fh:
+                    allow = ",".join(l.split("#", 1)[0].strip() for l in fh if l.split("#", 1)[0].strip())
+            except OSError:
+                allow = ""
+        if allow:
+            install_modbus_ip_filter(allow)
         log.info("Modbus-TCP-Server auf %s:%d  (%d Register)",
                  self.args.host, self.args.port, len(self.regmap.by_reg))
         StartTcpServer(context=self.context, address=(self.args.host, self.args.port))
+
+def _nets(spec):
+    import ipaddress
+    out = []
+    for x in str(spec).split(","):
+        x = x.strip()
+        if x:
+            out.append(ipaddress.ip_network(x, strict=False))
+    return out
+
+def _ip_allowed(ip, nets):
+    import ipaddress
+    try:
+        a = ipaddress.ip_address(ip)
+    except ValueError:
+        return False
+    if a.version == 6 and a.ipv4_mapped:
+        a = a.ipv4_mapped
+    return any(a in n for n in nets)
+
+def install_modbus_ip_filter(spec):
+    """Modbus-TCP nur fuer die angegebenen Adressen/Netze (z. B. Miniserver + localhost).
+    Modbus hat selbst keine Anmeldung: ohne Filter kann jedes Geraet im LAN die
+    freigegebenen Register schreiben. Getestet mit pymodbus 3.6."""
+    from pymodbus.server import ModbusTcpServer
+    nets = _nets(spec)
+    orig = ModbusTcpServer.handle_new_connection
+    def handle_new_connection(self, *a, **k):
+        h = orig(self, *a, **k)
+        made = h.connection_made
+        def guarded(transport, _made=made):
+            peer = (transport.get_extra_info("peername") or ("",))[0]
+            if not _ip_allowed(peer, nets):
+                log.warning("Modbus: Verbindung von %s abgewiesen (--allow-ip)", peer)
+                transport.close()
+                return None
+            return _made(transport)
+        h.connection_made = guarded
+        return h
+    ModbusTcpServer.handle_new_connection = handle_new_connection
+    log.info("Modbus: nur Clients aus %s", ", ".join(str(n) for n in nets))
 
 def main():
     ap = argparse.ArgumentParser()
@@ -684,6 +749,9 @@ def main():
     ap.add_argument("--registers", default=os.path.join(os.path.dirname(__file__), "registers.json"))
     ap.add_argument("--host", default="0.0.0.0")
     ap.add_argument("--port", type=int, default=502)
+    ap.add_argument("--allow-ip", default="",
+                    help="Modbus-Clients begrenzen, kommagetrennt, z. B. 127.0.0.1,192.168.1.20 oder 192.168.1.0/24 "
+                         "(leer = Datei modbus_allow_ip neben dem Skript, fehlt sie: alle)")
     ap.add_argument("--poll-interval", type=float, default=30.0)
     ap.add_argument("--poll-delay", type=float, default=0.1)
     ap.add_argument("--fast-interval", type=float, default=5.0,

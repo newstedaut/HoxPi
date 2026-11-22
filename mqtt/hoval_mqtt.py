@@ -314,6 +314,8 @@ def discovery(c, wl):
 def on_message(c, userdata, msg):
     parts = msg.topic.split("/")
     if len(parts) != 3 or parts[2] != "set": return
+    # 22.11.2026: gespeicherte (retained) Befehle nicht nach jedem Reconnect erneut ausfuehren
+    if getattr(msg, "retain", False): return
     ctrl = CTRL_BY_KEY.get(parts[1])
     if not ctrl: return
     _, reg, name, art, enum = ctrl
