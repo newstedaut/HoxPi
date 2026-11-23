@@ -9,6 +9,7 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
 - **06.11.2026 22:57 Freigabe CAN (der Betreiber: „Auf can schreiben kannst du mittlerweile. Du kennst dich da ja aus"):** CAN-SET auf TopTronic-Datenpunkte (auch ohne Modbus-Whitelist, z. B. per hoxpi_probe.py/candump-Weg) und der Kältereglerweg fg=60/fn=7 sind freigegeben - nur als Experiment nach EXPERIMENTE.md-Leitplanken: Originalwert lesen, Hypothese + Rückweg + Abbruchkriterium vorher notieren, schreiben, zurücklesen, zurückstellen, zurücklesen, Journal. Weiter tabu (nicht rückstellbar/schädlich): Opcode 0x44 (friert Datenpunkt bis WEZ-Neustart ein), CF-Karte/EEPROM/Firmware, Kälteregler-Parameter ohne belegte Bedeutung und Grenzen (iDM-Tabelle, Firmware-Analyse), X4-Slaves (Inverter/EVD/Lüfter) direkt.
 
 - Nur Katalogbereich, nur Register in der HoxPi-Whitelist (sonst der Betreiber fragen); Rücklesen mit `schreib_pruefung`.
+- **Ab 23.11.2026 (der Betreiber): Versuchsfenster immer offen**, auch nachts und sonntags. Statt Uhrzeit gilt die Komfortregel (SKILL.md R7a): WW-Soll hoechstens 60 min abgesenkt, WW-Ist nicht unter 45 C; Heizen hoechstens 60 min aus/abgesenkt, Raum max. 0,5 K unter Start; kein WW-Versuch waehrend WW-Ladung, Legionellenlauf oder erhoehtem Loxone-Wert an 1497. Bleibt: nie bei Aussentemperatur < 0 C (Frostschutz-Naehe).
 - Nie: ND/HD-/Heißgas-/Frostschutzgrenzen, Kälteregler (X26/X4/CAN-Schreiben), Loxone-Projektdatei (eigener Weg), Heizstab-Freigaben.
 - Loxone schreibt 1490 und 1497 alle 5 min zurück → bei diesen Registern ist der Rückweg automatisch; der Versuch muss in < 5 min seine Antwort liefern (WEZ-Sweep 60 s einrechnen).
 - **Schreiben gilt erst als erfolgt, wenn `SET reg <n>` im Bridge-Protokoll steht** (`journalctl -u hoval-bridge`). `write_register` und `schreib_pruefung` lesen nur die Modbus-Tabelle und melden auch abgelehnte Schreibvorgaenge als ok (E20, 06.11.2026).
@@ -91,8 +92,8 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   fruehester_start: "2026-11-03 13:30"
   dauer_min: 8
   spaetester_rueckweg: "2026-11-03 14:00"
-  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa]
-  sperrfenster: ["So 12:00-18:00"]
+  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
+  sperrfenster: []
   voraussetzungen: ["r(1534) == 255", "r(1504) == 0", "r(1497) == 50.0", "44.0 <= r(1500) <= 50.0", "r(1477) >= 0", "kein_experiment_aktiv", "whitelist_enthaelt(1497)", "kein_verdichterstopp_seit_10_min"]
   beobachtete_regeln: [W01]
   abbruch: ["r('1534') != 255"]
@@ -106,8 +107,8 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   fruehester_start: "2026-11-09 09:00"      # nach der 07-001-Abnahme am 07.11.; 08.11. ist ein Sonntag und nicht erlaubt
   dauer_min: 360
   spaetester_rueckweg: "17:00"
-  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa]
-  sperrfenster: ["So 12:00-18:00"]
+  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
+  sperrfenster: []
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "kein_experiment_aktiv", "whitelist_enthaelt(30684)"]
   beobachtete_regeln: [H01, H06, XE1]
   abbruch: ["r('1534') != 255", "r('1500') < 42.0"]
@@ -123,8 +124,8 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   fruehester_start: "2026-11-06 07:00"
   dauer_min: 6
   spaetester_rueckweg: "21:00"
-  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa]
-  sperrfenster: ["So 12:00-18:00"]
+  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
+  sperrfenster: []
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1504) == 0", "heizlauf_seit_mindestens_10_min", "kein_experiment_aktiv", "whitelist_enthaelt(1490)"]
   messgroessen: [1490, 1539, 25611, 18726, WP_VL, Vorlauf]
   abbruch: ["r('1534') != 255", "r('1500') < 42.0"]
@@ -139,8 +140,8 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   fruehester_start: "2026-11-06 07:00"
   dauer_min: 22
   spaetester_rueckweg: "21:00"
-  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa]
-  sperrfenster: ["So 12:00-18:00"]
+  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
+  sperrfenster: []
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1504) == 0", "r(1539) == 0", "letzter_verdichterstopp_vor_mindestens_20_min", "Ruecklauf > r(1490) - 1.0", "kein_experiment_aktiv", "whitelist_enthaelt(1490)"]
   messgroessen: [1490, 1539, 25611, Ruecklauf]
   abbruch: ["r('1534') != 255", "r('1500') < 42.0"]
@@ -155,8 +156,8 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   fruehester_start: "2026-11-06 07:00"
   dauer_min: 6
   spaetester_rueckweg: "21:00"
-  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa]
-  sperrfenster: ["So 12:00-18:00"]
+  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
+  sperrfenster: []
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1504) == 1", "ladung_seit_mindestens_5_min", "r(1500) >= 47.0", "kein_experiment_aktiv", "whitelist_enthaelt(1497)"]
   messgroessen: [1497, 1499, 1500, 1504, 1539, 25611]
   abbruch: ["r('1534') != 255", "r('1500') < 42.0"]
@@ -169,8 +170,8 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   fruehester_start: "2026-11-06 07:00"
   dauer_min: 5
   spaetester_rueckweg: "17:00"
-  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa]
-  sperrfenster: ["So 12:00-18:00"]
+  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
+  sperrfenster: []
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1504) == 0", "smart_grid_normal", "kein_experiment_aktiv", "whitelist_enthaelt(27509)"]
   messgroessen: [27509, 1497, 1499, 1504]
   abbruch: ["r('1534') != 255", "r('1504') != 0"]
@@ -184,8 +185,8 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   fruehester_start: "2026-11-06 07:00"
   dauer_min: 6
   spaetester_rueckweg: "21:00"
-  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa]
-  sperrfenster: ["So 12:00-18:00"]
+  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
+  sperrfenster: []
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1504) == 0", "heizlauf_seit_mindestens_10_min", "kein_experiment_aktiv", "whitelist_enthaelt(1490)"]
   messgroessen: [1490, 18726, 25611, Leistung_Soll, WP_VL]
   abbruch: ["r('1534') != 255", "r('1500') < 42.0"]
@@ -201,7 +202,7 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   dauer_min: 8
   spaetester_rueckweg: "21:00"
   erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]      # Chat 08.11. 11:05: der Betreiber "du kannst dich austoben", So ausserhalb 12-18 erlaubt
-  sperrfenster: ["So 12:00-18:00 (ausser 2026-11-08: der Betreiber im Chat 11:20 'fuer heute kannst du ganz normal testen')"]
+  sperrfenster: []
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1504) == 0", "r(1539) == 1", "heizlauf_seit_mindestens_10_min", "r(1500) >= 46.0", "kein_experiment_aktiv", "whitelist_enthaelt(1490)"]
   messgroessen: [1490, 1529, 1535, 1539, 25611, WP_RL]
   beobachtete_regeln: [H01]
@@ -219,7 +220,7 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   dauer_min: 8
   spaetester_rueckweg: "21:00"
   erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]      # Chat 08.11. 11:05: der Betreiber "du kannst dich austoben", So ausserhalb 12-18 erlaubt
-  sperrfenster: ["So 12:00-18:00"]
+  sperrfenster: []
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1504) == 0", "r(1539) == 1", "heizlauf_seit_mindestens_10_min", "r(1500) >= 46.0", "kein_experiment_aktiv", "whitelist_enthaelt(1490)"]
   messgroessen: [1490, 1529, 1535, 1539, 25611, WP_RL]
   beobachtete_regeln: [H01]
@@ -237,8 +238,8 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   fruehester_start: "2026-11-06 07:00"
   dauer_min: 6
   spaetester_rueckweg: "21:00"
-  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa]
-  sperrfenster: ["So 12:00-18:00"]
+  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
+  sperrfenster: []
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1504) == 0", "r(1539) == 1", "heizlauf_seit_mindestens_10_min", "kein_experiment_aktiv", "whitelist_enthaelt(1490)"]
   messgroessen: [1490, 18726, 25611, WP_VL]
   abbruch: ["r('1534') != 255", "r('1500') < 42.0"]
@@ -253,8 +254,8 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   fruehester_start: "2026-11-06 10:00"
   dauer_min: 6
   spaetester_rueckweg: "16:00"
-  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa]
-  sperrfenster: ["So 12:00-18:00"]
+  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
+  sperrfenster: []
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1504) == 0", "r(1539) == 0", "letzter_verdichterstopp_vor_mindestens_16_min", "r(1500) >= 44.0", "r(1500) <= 48.0", "kein_experiment_aktiv", "whitelist_enthaelt(1497)"]
   messgroessen: [1497, 1499, 1500, 1504, 1539, 25611]
   abbruch: ["r('1534') != 255", "r('1500') < 42.0"]
@@ -269,8 +270,8 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   fruehester_start: "2026-11-06 10:00"
   dauer_min: 6
   spaetester_rueckweg: "16:00"
-  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa]
-  sperrfenster: ["So 12:00-18:00"]
+  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
+  sperrfenster: []
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1504) == 0", "r(1539) == 1", "heizlauf_seit_mindestens_10_min", "r(1500) >= 44.0", "r(1500) <= 48.0", "kein_experiment_aktiv", "whitelist_enthaelt(1497)"]
   messgroessen: [1497, 1499, 1500, 1504, 1539, 25611, WP_VL]
   abbruch: ["r('1534') != 255", "r('1500') < 42.0"]
@@ -292,8 +293,8 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   fruehester_start: "2026-11-07 12:00"
   dauer_min: 6
   spaetester_rueckweg: "16:00"
-  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa]
-  sperrfenster: ["So 12:00-18:00"]
+  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
+  sperrfenster: []
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1504) == 0", "r(1539) == 1", "heizlauf_seit_mindestens_10_min", "r(1500) >= 44.0", "r(1500) <= 48.0", "kein_experiment_aktiv", "whitelist_enthaelt(1497)"]
   messgroessen: [1497, 1499, 1500, 1504, 1539, 25611, WP_VL]
   abbruch: ["r('1534') != 255", "r('1500') < 42.0"]
@@ -315,7 +316,7 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   dauer_min: 6
   spaetester_rueckweg: "21:00"      # OR 08.11. 10:56: 16:00 -> 21:00 (R9 17:00-Grenze: Kurzversuch 1497 auto_loxone darf 07-21), damit E23 sonntags ab 18:00 laufen kann
   erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
-  sperrfenster: ["So 12:00-18:00 (ausser 2026-11-08: der Betreiber im Chat 11:20 'fuer heute kannst du ganz normal testen')"]
+  sperrfenster: []
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1477) < 3.0", "r(1504) == 0", "r(1539) == 1", "heizlauf_seit_mindestens_10_min", "r(1500) >= 44.0", "r(1500) <= 48.0", "kein_experiment_aktiv", "whitelist_enthaelt(1497)"]
   messgroessen: [1497, 1499, 1500, 1504, 1539, 25611, WP_VL]
   beobachtete_regeln: [S02, S03, W01]
@@ -351,7 +352,7 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   dauer_min: 8
   spaetester_rueckweg: "21:00"
   erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
-  sperrfenster: ["So 12:00-18:00 (ausser 2026-11-08)"]
+  sperrfenster: []
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1504) == 0", "r(1539) != 8", "r(19482) == 0.0", "kein_experiment_aktiv", "whitelist_enthaelt(19482)"]
   messgroessen: [19482, 18763, 19870, 1501, 1539, 25611, 1525]
   beobachtete_regeln: []
@@ -369,8 +370,8 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   fruehester_start: "2026-11-06 10:00"
   dauer_min: 6
   spaetester_rueckweg: "21:00"
-  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa]
-  sperrfenster: ["So 12:00-18:00"]
+  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
+  sperrfenster: []
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1504) == 0", "r(1539) == 0", "letzter_verdichterstopp_vor_hoechstens_8_min", "kein_experiment_aktiv", "whitelist_enthaelt(1490)"]
   messgroessen: [1490, 1539, 25611, Ruecklauf]
   abbruch: ["r('1534') != 255", "r('1500') < 42.0"]
@@ -386,8 +387,8 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   fruehester_start: "2026-11-06 11:00"
   dauer_min: 22
   spaetester_rueckweg: "21:00"
-  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa]
-  sperrfenster: ["So 12:00-18:00"]
+  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
+  sperrfenster: []
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1504) == 0", "r(1539) == 0", "letzter_verdichterstopp_vor_mindestens_20_min", "Ruecklauf > r(1490) - 1.0", "kein_experiment_aktiv", "whitelist_enthaelt(1490)"]
   messgroessen: [1490, 1539, 25611, Ruecklauf]
   abbruch: ["r('1534') != 255", "r('1500') < 42.0"]
@@ -403,8 +404,8 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   fruehester_start: "2026-11-06 11:02"
   dauer_min: 3
   spaetester_rueckweg: "16:00"
-  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa]
-  sperrfenster: ["So 12:00-18:00"]
+  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
+  sperrfenster: []
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1496) == 4", "r(1498) == 45", "r(1504) == 0", "kein_experiment_aktiv", "whitelist_enthaelt(1498)"]
   messgroessen: [1498, 1499, 1504, 1539]
   abbruch: ["r('1534') != 255", "r('1500') < 42.0"]
@@ -418,8 +419,8 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   fruehester_start: "2026-11-06 12:00"
   dauer_min: 4
   spaetester_rueckweg: "17:00"
-  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa]
-  sperrfenster: ["So 12:00-18:00"]
+  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
+  sperrfenster: []
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1504) == 0", "smart_grid_vorzug", "r(1499) == r(1497)", "r(1497) + 1.0 - r(1500) < 4.5", "kein_experiment_aktiv", "whitelist_enthaelt(27509)"]
   messgroessen: [27509, 27545, 1497, 1499, 1500, 1504, 1539]
   abbruch: ["r('1534') != 255", "r('1504') != 0"]
@@ -434,8 +435,8 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   fruehester_start: "2026-11-06 12:30"
   dauer_min: 10
   spaetester_rueckweg: "21:00"
-  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa]
-  sperrfenster: ["So 12:00-18:00"]
+  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
+  sperrfenster: []
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1504) == 0", "r(1539) == 0", "letzter_verdichterstopp_vor_mindestens_20_min", "Ruecklauf > r(1490) + 1.0", "kein_experiment_aktiv", "whitelist_enthaelt(1490)"]
   messgroessen: [1490, 1477, 1539, 25611, "SET reg 1490 im Bridge-Protokoll"]
   abbruch: ["r('1534') != 255", "r('1500') < 42.0"]
@@ -449,8 +450,8 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   fruehester_start: "2026-11-06 12:55"
   dauer_min: 5
   spaetester_rueckweg: "16:00"
-  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa]
-  sperrfenster: ["So 12:00-18:00"]
+  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
+  sperrfenster: []
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1504) == 0", "r(27545) == 1", "r(27509) == 0", "r(1500) >= 47.0", "kein_experiment_aktiv", "whitelist_enthaelt(27509)"]
   messgroessen: [27509, 1499, 1500, 1504, 1539, 25611]
   abbruch: ["r('1534') != 255", "r('1500') < 42.0", "r('27545') != 1"]
@@ -463,8 +464,8 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   fruehester_start: "2026-11-06 13:55"
   dauer_min: 4
   spaetester_rueckweg: "21:00"
-  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa]
-  sperrfenster: ["So 12:00-18:00"]
+  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
+  sperrfenster: []
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1504) == 0", "r(1539) == 1", "r(27545) == 1", "r(28839) == 0", "kein_experiment_aktiv", "whitelist_enthaelt(28839)"]
   messgroessen: [28839, 1490, 1529, 1535, 1539, 25611, Modulation]
   abbruch: ["r('1534') != 255", "r('1500') < 42.0", "r('27545') != 1"]
@@ -479,8 +480,8 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   fruehester_start: "2026-11-06 14:58"
   dauer_min: 5
   spaetester_rueckweg: "21:00"
-  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa]
-  sperrfenster: ["So 12:00-18:00"]
+  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
+  sperrfenster: []
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1504) == 0", "r(1539) == 1", "r(1490) == 35.8", "kein_experiment_aktiv", "whitelist_enthaelt(1490)"]
   messgroessen: [1490, 1529, 1539, 25611, Modulation, "SET reg 1490 im Bridge-Protokoll"]
   beobachtete_regeln: [H01]
@@ -497,7 +498,7 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   dauer_min: 8
   spaetester_rueckweg: "21:00"
   erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
-  sperrfenster: ["So 12:00-18:00"]
+  sperrfenster: []
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1504) == 1", "r(1500) >= 44.5", "r(1500) <= 50.0", "kein_experiment_aktiv", "whitelist_enthaelt(1497)"]
   messgroessen: [1497, 1499, 1500, 1504, 1530, 25611, 18726]
   beobachtete_regeln: [W01, S02, S03]
@@ -516,7 +517,7 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   dauer_min: 6
   spaetester_rueckweg: "21:00"
   erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
-  sperrfenster: ["So 12:00-18:00"]
+  sperrfenster: []
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1504) == 1", "r(1500) >= 44.5", "r(1500) <= 50.0", "kein_experiment_aktiv", "whitelist_enthaelt(1497)"]
   messgroessen: [1497, 1499, 1500, 1504, 1530, 25611, 18726]
   beobachtete_regeln: [W01, S02, S03]
@@ -535,7 +536,7 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   dauer_min: 8
   spaetester_rueckweg: "21:00"
   erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
-  sperrfenster: ["So 12:00-18:00"]
+  sperrfenster: []
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1504) == 0", "r(1539) == 1", "heizlauf_seit_mindestens_10_min", "r(1500) >= 46.0", "kein_experiment_aktiv", "whitelist_enthaelt(1490)"]
   messgroessen: [1490, 1529, 1535, 1539, 25611, WP_RL]
   nachbeobachtung: "p_el_kw (Prometheus) bis zum Wiederanlauf, max. 30 min, nur lesen; Wiederanlaufzeit und 1490/1529 beim Start notieren"
@@ -556,7 +557,7 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   dauer_min: 8
   spaetester_rueckweg: "21:00"
   erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
-  sperrfenster: ["So 12:00-18:00"]
+  sperrfenster: []
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1504) == 1", "r(1500) >= 44.5", "r(1500) <= 50.0", "kein_experiment_aktiv", "whitelist_enthaelt(1497)"]
   messgroessen: [1497, 1499, 1500, 1504, 1530, 25611]
   beobachtete_regeln: [W01, S02, S03]
@@ -575,7 +576,7 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   dauer_min: 8
   spaetester_rueckweg: "21:00"
   erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
-  sperrfenster: ["So 12:00-18:00"]
+  sperrfenster: []
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1504) == 0", "r(1500) >= 45.5", "r(1500) <= 47.0", "kein_experiment_aktiv", "whitelist_enthaelt(1497)"]
   messgroessen: [1497, 1499, 1500, 1504, 1539, 25611]
   beobachtete_regeln: [W01]
@@ -594,7 +595,7 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   dauer_min: 8
   spaetester_rueckweg: "16:45"
   erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
-  sperrfenster: ["So 12:00-18:00", "taeglich 16:50-17:15", "taeglich 18:45-19:00"]
+  sperrfenster: ["taeglich 16:50-17:15", "taeglich 18:45-19:00"]
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1504) == 0", "r(1499) == r(1497)", "r(1500) >= 45.5", "r(1500) <= 47.0", "r(27545) == 0", "kein_experiment_aktiv", "whitelist_enthaelt(1497)"]
   messgroessen: [1497, 1499, 1500, 1504, 1539, 25611]
   beobachtete_regeln: [W01]
@@ -614,7 +615,7 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   dauer_min: 8
   spaetester_rueckweg: "21:00"
   erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
-  sperrfenster: ["So 12:00-18:00"]
+  sperrfenster: []
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1504) == 1", "verdichter_laeuft_seit_3_min (25611 > 1.0)", "r(1500) >= 44.5", "r(1500) <= 50.0", "kein_experiment_aktiv", "whitelist_enthaelt(1497)"]
   messgroessen: [1497, 1499, 1500, 1504, 1530, 25611]
   beobachtete_regeln: [W01, S02, S03]
@@ -634,7 +635,7 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   dauer_min: 8
   spaetester_rueckweg: "21:00"
   erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
-  sperrfenster: ["So 12:00-18:00", "taeglich 16:50-17:15", "taeglich 18:45-19:00"]
+  sperrfenster: ["taeglich 16:50-17:15", "taeglich 18:45-19:00"]
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1504) == 1", "verdichter_laeuft_seit_10_min (25611 > 1.0)", "r(1500) >= 48.5", "r(1500) <= 50.0", "r(1497) == 50.0", "kein_experiment_aktiv", "whitelist_enthaelt(1497)"]
   messgroessen: [1497, 1499, 1500, 1504, 1530, 25611]
   beobachtete_regeln: [W01, S02, S03]
@@ -653,7 +654,7 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   dauer_min: 6
   spaetester_rueckweg: "21:00"
   erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
-  sperrfenster: ["So 12:00-18:00", "taeglich 16:50-17:15", "taeglich 18:45-19:00"]
+  sperrfenster: ["taeglich 16:50-17:15", "taeglich 18:45-19:00"]
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1504) == 1", "verdichter_laeuft (25611 > 1.0)", "r(1500) >= 44.0", "r(1500) <= 48.5", "r(1497) == 50.0", "kein_experiment_aktiv", "whitelist_enthaelt(1497)"]
   messgroessen: [1497, 1499, 1500, 1504, 1530, 25611]
   beobachtete_regeln: [W01, S02, S03]
@@ -672,7 +673,7 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   dauer_min: 6
   spaetester_rueckweg: "21:00"
   erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
-  sperrfenster: ["So 12:00-18:00", "taeglich 16:50-17:15", "taeglich 18:45-19:00"]
+  sperrfenster: ["taeglich 16:50-17:15", "taeglich 18:45-19:00"]
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1504) == 1", "verdichter_laeuft (25611 > 1.0)", "r(1500) >= 44.0", "r(1500) <= 48.0", "r(1497) == 50.0", "kein_experiment_aktiv", "whitelist_enthaelt(1497)"]
   messgroessen: [1497, 1499, 1500, 1504, 1530, 25611]
   beobachtete_regeln: [W01, S02, S03]
@@ -691,14 +692,33 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   dauer_min: 6
   spaetester_rueckweg: "21:00"
   erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
-  sperrfenster: ["So 12:00-18:00", "taeglich 16:50-17:15", "taeglich 18:45-19:00"]
+  sperrfenster: ["taeglich 16:50-17:15", "taeglich 18:45-19:00"]
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1477) < 3.0", "r(1504) == 0", "heizlauf_seit_mindestens_10_min", "verdichter_laeuft_jetzt (25611 > 1.0, < 30 s alt)", "r(1500) >= 44.0", "r(1500) <= 48.0", "r(1497) == 50.0", "kein_experiment_aktiv", "whitelist_enthaelt(1497)"]
   messgroessen: [1497, 1499, 1500, 1504, 1539, 25611, WP_VL]
   beobachtete_regeln: [S02, S03, W01]
   abbruch: ["r('1534') != 255", "r('1500') < 42.0"]
+  status: abgeschlossen
+  ergebnis: "23.11.2026 07:02:54 1497 50,0 -> 53,0 (1500 = 47,6, 1477 = 1,1 C, Heizlauf seit 05:02, 25611 = 1,80 kW), Setlog SET 530 angenommen, schreib_pruefung haelt. Bestaetigt (n = 3 mit E13/E22, jetzt auch bei 1 C): ww_status 0 -> 1 bis 07:03:30 (<= 36 s), Verdichter ohne Stopp (p_el nie < 1,79 kW, Rampe auf 5,8 kW bis 07:04:30), WP-VL 37,4 -> 51,7 C bis 07:10. Rueckweg auto_loxone 07:07:41 (1497 = 50,0 rueckgelesen 07:09), Ladung laeuft danach regulaer weiter (WW-Ist 46,4 < 50). Was bringt uns das: Loxone kann bei Frost eine WW-Ladung an einen laufenden Heizlauf haengen, ohne Zusatzstart."
+  angelegt: "OR 16.11.2026 09:07 (E23 ungueltig: Heizlauf endete 2 min vor dem Schreiben). Was bringt uns das: zeigt, ob Loxone bei Frost eine WW-Ladung an einen laufenden Heizlauf anhaengen kann, ohne einen zusaetzlichen Verdichterstart (Takt) zu erzeugen."
+- id: E41
+  titel: "(Gegenstueck zu E37/E40) Absenkung 1490 um 3 K im laufenden Heizlauf: sinkt die Modulation symmetrisch, oder stoppt der Verdichter?"
+  hypothese: "E40 (22.11.): +3 K -> 2,3 %/K. Erwartet: -3 K auf 1490 senkt 18726 binnen 3 min um 5-9 %-Punkte, Verdichter laeuft weiter (25611 > 0,3). Widerlegt, wenn der Verdichter binnen 5 min stoppt (Mindestmodulation erreicht -> Takt) oder die Modulation < 3 %-Punkte faellt."
+  register: 1490
+  wert_formel: "max(25.0, round(ist_1490 - 3.0, 1))"
+  schreibzeit: "knapp nach einem Loxone-Schreiben auf 1490 (Takt :x4:34/:x9:34 laut Setlog 23.11.); unmittelbar davor 25611 > 1.0 lesen"
+  rueckweg: auto_loxone
+  fruehester_start: "2026-11-23 09:00"
+  dauer_min: 5
+  spaetester_rueckweg: "21:00"
+  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
+  sperrfenster: ["taeglich 16:50-17:15", "taeglich 18:45-19:00"]
+  voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1504) == 0", "heizlauf_seit_mindestens_10_min", "verdichter_laeuft_jetzt (25611 > 1.0, < 30 s alt)", "kein_experiment_aktiv", "whitelist_enthaelt(1490)"]
+  messgroessen: [1490, 18726, 25611, 1513, 1525, 1539]
+  beobachtete_regeln: [S02, H01]
+  abbruch: ["r('1534') != 255", "25611 < 0.3 laenger als 60 s (Verdichterstopp -> sofort Ergebnis 'widerlegt', Loxone stellt 1490 binnen 5 min zurueck)"]
   status: geplant
   ergebnis: null
-  angelegt: "OR 16.11.2026 09:07 (E23 ungueltig: Heizlauf endete 2 min vor dem Schreiben). Was bringt uns das: zeigt, ob Loxone bei Frost eine WW-Ladung an einen laufenden Heizlauf anhaengen kann, ohne einen zusaetzlichen Verdichterstart (Takt) zu erzeugen."
+  angelegt: "OR 23.11.2026 07:12 (R9 Vorrat < 3). Was bringt uns das: zeigt, wie weit die adaptive Heizkurve (F337) den Vorlauf absenken kann, ohne dass die ueberdimensionierte WP an der Mindestmodulation taktet."
 - id: E37
   titel: "(E11 n = 2) Verstaerkung 1490 bei Frostnaehe (1477 0-5 C): wie viel % Modulation je K Soll-Sprung?"
   hypothese: "Wie E11 (06.11., +4 K -> +12 %-Punkte binnen 65 s, 3 %/K): +4 K auf 1490 im laufenden Heizlauf heben 18726 binnen 2 min um 8-16 %-Punkte. Widerlegt, wenn < 4 %-Punkte (Modulation nahe Minimum reagiert anders) oder > 20."
@@ -709,8 +729,8 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   fruehester_start: "2026-11-19 08:05"
   dauer_min: 5
   spaetester_rueckweg: "21:00"
-  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa]
-  sperrfenster: ["So 12:00-18:00"]
+  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
+  sperrfenster: []
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1477) <= 5.0", "r(1504) == 0", "r(1539) == 1", "heizlauf_seit_mindestens_10_min", "kein_experiment_aktiv", "whitelist_enthaelt(1490)"]
   messgroessen: [1490, 18726, 25611, WP_VL]
   beobachtete_regeln: [H01, H06]
@@ -729,8 +749,8 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   fruehester_start: "2026-11-20 19:00"
   dauer_min: 5
   spaetester_rueckweg: "21:00"
-  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa]
-  sperrfenster: ["So 12:00-18:00"]
+  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
+  sperrfenster: []
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1477) <= 5.0", "r(1504) == 0", "r(1539) == 1", "heizlauf_seit_mindestens_10_min", "kein_experiment_aktiv", "whitelist_enthaelt(1490)"]
   messgroessen: [1490, 18726, 25611, WP_VL]
   beobachtete_regeln: [H01, H06]
@@ -749,8 +769,8 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   fruehester_start: "2026-11-21 07:55"
   dauer_min: 5
   spaetester_rueckweg: "21:00"
-  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa]
-  sperrfenster: ["So 12:00-18:00"]
+  erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
+  sperrfenster: []
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1477) <= 5.0", "r(1504) == 0", "r(1539) == 1", "heizlauf_seit_mindestens_10_min", "kein_experiment_aktiv", "whitelist_enthaelt(1490)"]
   messgroessen: [1490, 18726, 25611]
   beobachtete_regeln: [H01, H06]
@@ -769,7 +789,7 @@ Regel im Vault `[eigene Notizen]` (Abschnitt „Wichtig“). Jeder Versuch steht
   dauer_min: 5
   spaetester_rueckweg: "21:00"
   erlaubte_tage: [Mo, Di, Mi, Do, Fr, Sa, So]
-  sperrfenster: ["So 12:00-18:00"]
+  sperrfenster: []
   voraussetzungen: ["r(1534) == 255", "r(1477) >= 0", "r(1477) <= 5.0", "r(1504) == 0", "r(1539) == 1", "heizlauf_seit_mindestens_10_min", "kein_experiment_aktiv", "whitelist_enthaelt(1490)"]
   messgroessen: [1490, 18726, 25611]
   beobachtete_regeln: [H01, H06]
