@@ -11,8 +11,12 @@
 # Behält die letzten 14 Stände. Off-Device-Kopie per scp (z. B. aus einem Cowork-/Cron-Lauf) empfohlen.
 python3 -c "import json,sys; sys.exit(0 if json.load(open('/home/admin/hoxpi-features.json')).get('backup',{}).get('enabled',True) else 1)" 2>/dev/null || { echo "$(date) Backup deaktiviert (features.json)"; exit 0; }
 set -u
+# Die Archive enthalten Zugangsdaten (2FA-auth.json, MCP-Token): nur für den Besitzer lesbar.
+umask 077
 BDIR="/home/admin/hoxpi-backups"
 mkdir -p "$BDIR"
+chmod 700 "$BDIR" 2>/dev/null
+chmod 600 "$BDIR"/hoxpi_*.tar.gz 2>/dev/null   # ältere Archive nachziehen
 TS=$(date +%Y%m%d_%H%M%S)
 OUT="$BDIR/hoxpi_$TS.tar.gz"
 STAGE=$(mktemp -d)
